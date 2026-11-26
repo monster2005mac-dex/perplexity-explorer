@@ -1,0 +1,3394 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Perplexity Explorer</title>
+  <style>
+    /* ══════════════════════════════════════════════════════════════════════
+   DESIGN TOKENS
+══════════════════════════════════════════════════════════════════════ */
+    :root {
+      --bg: #eef2ff;
+      --card: rgba(255, 255, 255, 0.92);
+      --text: #0f172a;
+      --muted: #64748b;
+      --border: rgba(203, 213, 225, 0.8);
+      --primary: #4f46e5;
+      --accent: #7c3aed;
+      --soft-blue: #eef2ff;
+      --soft-purple: #f5f3ff;
+      --danger: #dc2626;
+      --danger-bg: #fef2f2;
+      --success: #059669;
+      --warn: #d97706;
+      --radius: 18px;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      --shadow-3d: 0 22px 44px -16px rgba(15, 23, 42, .13), 0 6px 16px -4px rgba(79, 70, 229, .08), inset 0 1px 0 rgba(255, 255, 255, .95);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      padding: 24px 14px 84px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background:
+        radial-gradient(900px 500px at 12% -5%, rgba(99, 102, 241, .16), transparent 60%),
+        radial-gradient(800px 500px at 90% 8%, rgba(168, 85, 247, .14), transparent 60%),
+        linear-gradient(180deg, #f1f5ff 0%, #f8fafc 55%, #eef2ff 100%);
+      background-attachment: fixed;
+      color: var(--text);
+      line-height: 1.55;
+    }
+
+    .container {
+      max-width: 1040px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      perspective: 1400px;
+    }
+
+    /* ── Animations ────────────────────────────────────────────────────── */
+    @keyframes fadeUp {
+      from {
+        opacity: 0;
+        transform: translateY(12px) scale(.99)
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0) scale(1)
+      }
+    }
+
+    .fade-in {
+      animation: fadeUp .32s cubic-bezier(.22, 1, .36, 1) both;
+    }
+
+    /* ── Header ────────────────────────────────────────────────────────── */
+    header {
+      text-align: center;
+      margin-bottom: 2px;
+    }
+
+    header h1 {
+      margin: 0;
+      font-size: 2.3rem;
+      font-weight: 900;
+      letter-spacing: -.03em;
+      background: linear-gradient(135deg, #1d4ed8 0%, #4f46e5 45%, #7c3aed 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      filter: drop-shadow(0 4px 12px rgba(79, 70, 229, .16));
+    }
+
+    header .sub {
+      margin: 6px 0 0;
+      color: var(--muted);
+      font-size: .98rem;
+      font-weight: 500;
+    }
+
+    .hero-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      margin-top: 14px;
+    }
+
+    .formula-pill {
+      background: rgba(255, 255, 255, .85);
+      backdrop-filter: blur(10px);
+      border: 1px solid #c7d2fe;
+      border-bottom: 3px solid #a5b4fc;
+      border-radius: 14px;
+      padding: 10px 18px;
+      font-family: var(--mono);
+      font-size: .96rem;
+      color: #1e1b6e;
+      box-shadow: 0 8px 20px -6px rgba(79, 70, 229, .16);
+    }
+
+    .btn-info {
+      border: none;
+      border-radius: 12px;
+      padding: 10px 16px;
+      font-size: .88rem;
+      font-weight: 700;
+      cursor: pointer;
+      background: linear-gradient(180deg, #5b54f0, #4338ca);
+      color: #fff;
+      box-shadow: 0 4px 0 #312e81, 0 10px 20px -4px rgba(79, 70, 229, .35);
+      transition: transform .1s, box-shadow .1s, filter .15s;
+    }
+
+    .btn-info:hover {
+      filter: brightness(1.07);
+      transform: translateY(-1px);
+    }
+
+    .btn-info:active {
+      transform: translateY(3px);
+      box-shadow: 0 1px 0 #312e81, 0 4px 10px rgba(79, 70, 229, .25);
+    }
+
+    /* ── Modal ─────────────────────────────────────────────────────────── */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, .58);
+      backdrop-filter: blur(5px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+      padding: 16px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .2s;
+    }
+
+    .modal-overlay.open {
+      opacity: 1;
+      pointer-events: all;
+    }
+
+    .modal {
+      background: #fff;
+      border-radius: 18px;
+      padding: 28px;
+      max-width: 660px;
+      width: 100%;
+      max-height: 90vh;
+      overflow-y: auto;
+      box-shadow: 0 24px 64px rgba(15, 23, 42, .22);
+      transform: translateY(14px);
+      transition: transform .2s;
+    }
+
+    .modal-overlay.open .modal {
+      transform: translateY(0);
+    }
+
+    .modal-top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+
+    .modal-top h2 {
+      margin: 0;
+      font-size: 1.22rem;
+      font-weight: 800;
+      color: #0f172a;
+    }
+
+    .modal-close {
+      border: none;
+      background: #f1f5f9;
+      border-radius: 8px;
+      width: 32px;
+      height: 32px;
+      font-size: 1.1rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--muted);
+    }
+
+    .modal-close:hover {
+      background: #e2e8f0;
+    }
+
+    .m-box {
+      background: #f8fafc;
+      border: 1px solid #c7d2fe;
+      border-radius: 12px;
+      padding: 14px 16px;
+      margin: 12px 0;
+      font-family: var(--mono);
+      font-size: .97rem;
+      color: #2563eb;
+      text-align: center;
+      line-height: 2;
+    }
+
+    .m-sec {
+      margin-top: 16px;
+    }
+
+    .m-sec h3 {
+      margin: 0 0 5px;
+      font-size: .97rem;
+      font-weight: 700;
+      color: #0f172a;
+    }
+
+    .m-sec p {
+      margin: 0 0 5px;
+      font-size: .91rem;
+      color: var(--muted);
+    }
+
+    .m-sec ul {
+      margin: 5px 0 0 18px;
+      padding: 0;
+      font-size: .9rem;
+    }
+
+    .m-sec li {
+      margin-bottom: 4px;
+    }
+
+    .m-sec li strong {
+      color: var(--primary);
+    }
+
+    .scale-bar {
+      display: flex;
+      border-radius: 8px;
+      overflow: hidden;
+      height: 28px;
+      margin: 10px 0;
+    }
+
+    .scale-seg {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: .7rem;
+      font-weight: 700;
+      color: #fff;
+    }
+
+    .modal-ok {
+      display: block;
+      margin: 20px 0 0 auto;
+      border: none;
+      border-radius: 10px;
+      padding: 10px 24px;
+      font-size: .94rem;
+      font-weight: 700;
+      cursor: pointer;
+      background: linear-gradient(135deg, #4f46e5, #7c3aed);
+      color: #fff;
+    }
+
+    /* ── Cards (3D Spatial Glass & Ceramic) ───────────────────────────── */
+    .card {
+      background: var(--card);
+      backdrop-filter: blur(14px);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px 26px;
+      box-shadow: var(--shadow-3d);
+      transform-style: preserve-3d;
+      transition: transform .22s ease, box-shadow .22s ease;
+    }
+
+    .card:hover {
+      box-shadow: 0 26px 50px -16px rgba(15, 23, 42, .15), 0 8px 20px -4px rgba(79, 70, 229, .11), inset 0 1px 0 rgba(255, 255, 255, .98);
+    }
+
+    .card-header {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+
+    .card h2 {
+      margin: 0;
+      font-size: 1.2rem;
+      font-weight: 800;
+      color: #0f172a;
+      display: flex;
+      align-items: center;
+    }
+
+    .section-num {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      height: 28px;
+      border-radius: 9px;
+      background: linear-gradient(180deg, #5b54f0, #4338ca);
+      color: #fff;
+      font-size: .8rem;
+      font-weight: 800;
+      margin-right: 10px;
+      flex-shrink: 0;
+      box-shadow: 0 3px 0 #312e81, 0 4px 10px rgba(79, 70, 229, .25);
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 4px 11px;
+      border-radius: 999px;
+      font-size: .77rem;
+      font-weight: 700;
+      background: var(--soft-purple);
+      color: var(--accent);
+      border: 1px solid #ddd6fe;
+      box-shadow: 0 2px 4px rgba(124, 58, 237, .08);
+    }
+
+    .badge-blue {
+      background: var(--soft-blue);
+      color: #3730a3;
+      border-color: #c7d2fe;
+    }
+
+    .badge-green {
+      background: #ecfdf5;
+      color: #065f46;
+      border-color: #a7f3d0;
+    }
+
+    .badge-amber {
+      background: #fffbeb;
+      color: #92400e;
+      border-color: #fde68a;
+    }
+
+    /* ── Inputs ─────────────────────────────────────────────────────────── */
+    label {
+      display: block;
+      font-weight: 600;
+      font-size: .91rem;
+      margin-bottom: 6px;
+    }
+
+    input[type="text"],
+    input[type="number"] {
+      width: 100%;
+      padding: 11px 14px;
+      border: 1px solid #cbd5e1;
+      border-bottom: 2px solid #94a3b8;
+      border-radius: 12px;
+      font-size: 1rem;
+      font-family: inherit;
+      color: var(--text);
+      background: #fff;
+      box-shadow: inset 0 2px 4px rgba(15, 23, 42, .04);
+      transition: border-color .15s, box-shadow .15s;
+    }
+
+    input:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(79, 70, 229, .18), inset 0 2px 4px rgba(15, 23, 42, .03);
+    }
+
+    input[type="range"] {
+      width: 100%;
+      accent-color: var(--primary);
+      cursor: pointer;
+    }
+
+    .row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      margin-top: 12px;
+    }
+
+    /* ── Tactile 3D Push Buttons ────────────────────────────────────────── */
+    button {
+      border: none;
+      border-radius: 12px;
+      padding: 10px 16px;
+      font-size: .91rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: transform .1s, box-shadow .1s, filter .15s;
+    }
+
+    button:active:not(:disabled) {
+      transform: translateY(2px);
+    }
+
+    button:disabled {
+      opacity: .6;
+      cursor: not-allowed;
+    }
+
+    .btn-primary {
+      background: linear-gradient(180deg, #3b82f6 0%, #4f46e5 55%, #4338ca 100%);
+      color: #fff;
+      box-shadow: 0 4px 0 #312e81, 0 8px 18px -4px rgba(79, 70, 229, .35);
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      filter: brightness(1.07);
+      transform: translateY(-1px);
+    }
+
+    .btn-primary:active:not(:disabled) {
+      transform: translateY(3px);
+      box-shadow: 0 1px 0 #312e81, 0 3px 8px rgba(79, 70, 229, .25);
+    }
+
+    .btn-sample {
+      background: #fff;
+      color: #3730a3;
+      border: 1px solid #c7d2fe;
+      border-bottom: 3px solid #a5b4fc;
+      padding: 7px 12px;
+      font-size: .85rem;
+      box-shadow: 0 3px 8px rgba(79, 70, 229, .08);
+    }
+
+    .btn-sample:hover:not(:disabled) {
+      background: #eef2ff;
+      transform: translateY(-1px);
+    }
+
+    .btn-sample:active:not(:disabled) {
+      transform: translateY(2px);
+      border-bottom-width: 1px;
+    }
+
+    .btn-secondary {
+      background: #fff;
+      color: var(--accent);
+      border: 1px solid #ddd6fe;
+      border-bottom: 3px solid #c4b5fd;
+      padding: 7px 13px;
+      font-size: .85rem;
+      box-shadow: 0 3px 8px rgba(124, 58, 237, .08);
+    }
+
+    .btn-secondary:hover:not(:disabled) {
+      background: #f5f3ff;
+      transform: translateY(-1px);
+    }
+
+    .btn-secondary:active:not(:disabled) {
+      transform: translateY(2px);
+      border-bottom-width: 1px;
+    }
+
+    .btn-remove {
+      background: #fef2f2;
+      color: #b91c1c;
+      border: 1px solid #fecaca;
+      border-bottom: 3px solid #fca5a5;
+      padding: 7px 10px;
+      font-size: .82rem;
+      border-radius: 9px;
+    }
+
+    .btn-remove:hover {
+      background: #fee2e2;
+    }
+
+    /* ── Status / progress ──────────────────────────────────────────────── */
+    .status {
+      margin-top: 12px;
+      font-size: .91rem;
+      font-weight: 500;
+      color: var(--muted);
+      min-height: 1.4em;
+    }
+
+    .status.ready {
+      color: var(--success);
+    }
+
+    .status.error {
+      color: var(--danger);
+      background: var(--danger-bg);
+      border: 1px solid #fecaca;
+      padding: 10px 12px;
+      border-radius: 10px;
+    }
+
+    .progress-wrap {
+      margin-top: 8px;
+      height: 7px;
+      background: #e2e8f0;
+      border-radius: 999px;
+      overflow: hidden;
+      display: none;
+    }
+
+    .progress-wrap.visible {
+      display: block;
+    }
+
+    .progress-bar {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #2563eb, #7c3aed);
+      transition: width .2s ease;
+    }
+
+    /* ── History chips ──────────────────────────────────────────────────── */
+    .history-wrap {
+      margin-top: 14px;
+      padding-top: 12px;
+      border-top: 1px dashed var(--border);
+      display: none;
+    }
+
+    .history-wrap.visible {
+      display: block;
+    }
+
+    .history-title {
+      font-size: .8rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+
+    .history-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 7px;
+    }
+
+    .history-chip {
+      background: #f8fafc;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 5px 11px;
+      font-size: .83rem;
+      color: var(--text);
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      cursor: pointer;
+    }
+
+    .history-chip:hover {
+      border-color: var(--primary);
+      background: var(--soft-blue);
+    }
+
+    .history-chip strong {
+      color: var(--primary);
+    }
+
+    /* ── Token strip (3D Keycap Chips) ─────────────────────────────────── */
+    .token-strip {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 9px;
+      margin-bottom: 14px;
+    }
+
+    .token-chip {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 8px 12px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      border-bottom: 3px solid #cbd5e1;
+      background: #fff;
+      cursor: pointer;
+      box-shadow: 0 4px 10px rgba(15, 23, 42, .06);
+      transition: transform .12s, box-shadow .12s;
+    }
+
+    .token-chip:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 10px 18px rgba(15, 23, 42, .1);
+    }
+
+    .token-chip:active {
+      transform: translateY(1px);
+    }
+
+    .token-chip.prob-high {
+      background: linear-gradient(180deg, #ffffff, #ecfdf5);
+      border-color: #a7f3d0;
+      border-bottom-color: #34d399;
+    }
+
+    .token-chip.prob-mid {
+      background: linear-gradient(180deg, #ffffff, #fffbeb);
+      border-color: #fde68a;
+      border-bottom-color: #fbbf24;
+    }
+
+    .token-chip.prob-low {
+      background: linear-gradient(180deg, #ffffff, #fef2f2);
+      border-color: #fecaca;
+      border-bottom-color: #f87171;
+    }
+
+    .tc-label {
+      font-family: var(--mono);
+      font-size: .88rem;
+      font-weight: 700;
+    }
+
+    .tc-prob {
+      font-size: .72rem;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+
+    .tc-nlp {
+      font-size: .68rem;
+      color: var(--accent);
+      margin-top: 1px;
+      font-family: var(--mono);
+    }
+
+    .tc-rank {
+      font-size: .66rem;
+      color: var(--warn);
+      margin-top: 1px;
+    }
+
+    /* ── SVG charts ─────────────────────────────────────────────────────── */
+    .chart-wrap {
+      overflow-x: auto;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: #fafbff;
+      margin-top: 12px;
+      padding: 4px 0;
+    }
+
+    .chart-title {
+      font-size: .8rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+      color: var(--muted);
+      padding: 8px 14px 0;
+    }
+
+    /* ── Tables ─────────────────────────────────────────────────────────── */
+    .table-wrap {
+      overflow-x: auto;
+      margin-top: 10px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: .91rem;
+    }
+
+    th,
+    td {
+      text-align: left;
+      padding: 9px 11px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    th {
+      font-size: .78rem;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+      color: var(--muted);
+      background: #f8fafc;
+    }
+
+    tbody tr.hl {
+      background: #eef2ff;
+    }
+
+    tbody tr:hover {
+      background: #f8fafc;
+    }
+
+    .token-pill {
+      display: inline-block;
+      font-family: var(--mono);
+      background: #f1f5f9;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      padding: 2px 7px;
+      font-size: .87rem;
+    }
+
+    .mono {
+      font-family: var(--mono);
+    }
+
+    td.cn {
+      font-family: var(--mono);
+    }
+
+    /* nlp */
+    td.ci {
+      color: #2563eb;
+      font-family: var(--mono);
+    }
+
+    /* inv p */
+    td.ca {
+      color: #7c3aed;
+      font-family: var(--mono);
+    }
+
+    /* nlp */
+    td.cb {
+      color: var(--muted);
+      font-family: var(--mono);
+    }
+
+    /* bits */
+    td.ce {
+      color: var(--warn);
+      font-family: var(--mono);
+    }
+
+    /* entropy */
+    td.cr {
+      color: #059669;
+      font-family: var(--mono);
+    }
+
+    /* rank */
+
+    /* rank badge in table */
+    .rank-pill {
+      display: inline-block;
+      padding: 1px 6px;
+      border-radius: 5px;
+      font-size: .8rem;
+      font-weight: 700;
+    }
+
+    .rank-1 {
+      background: #ecfdf5;
+      color: #059669;
+    }
+
+    .rank-top10 {
+      background: #fffbeb;
+      color: #d97706;
+    }
+
+    .rank-other {
+      background: #fef2f2;
+      color: #dc2626;
+    }
+
+    /* ── Derivation ──────────────────────────────────────────────────────── */
+    .deriv-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      margin-top: 16px;
+    }
+
+    @media(max-width:680px) {
+      .deriv-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .dbox {
+      background: #f8fafc;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px 15px;
+    }
+
+    .dbox-title {
+      font-size: .77rem;
+      text-transform: uppercase;
+      letter-spacing: .05em;
+      font-weight: 700;
+      color: var(--muted);
+      margin-bottom: 10px;
+    }
+
+    .sp-step {
+      margin-bottom: 9px;
+    }
+
+    .sp-label {
+      font-weight: 700;
+      color: #3730a3;
+      font-size: .82rem;
+      display: block;
+      margin-bottom: 3px;
+    }
+
+    .sp-code {
+      display: block;
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      padding: 7px 10px;
+      font-family: var(--mono);
+      font-size: .85rem;
+      word-break: break-all;
+      line-height: 1.5;
+    }
+
+    .hl-invp {
+      color: #2563eb;
+      font-weight: 700;
+    }
+
+    .hl-nlp {
+      color: #7c3aed;
+      font-weight: 700;
+    }
+
+    .hl-mean {
+      color: #2563eb;
+      font-weight: 700;
+    }
+
+    .hl-ppl {
+      color: #059669;
+      font-weight: 700;
+    }
+
+    .equiv-note {
+      margin-top: 10px;
+      padding: 9px 13px;
+      background: #f8fafc;
+      border: 1px solid var(--border);
+      border-radius: 9px;
+      font-size: .85rem;
+      color: var(--muted);
+    }
+
+    .equiv-note strong {
+      color: #3730a3;
+    }
+
+    /* ── PPL result box ──────────────────────────────────────────────────── */
+    .ppl-box {
+      background: linear-gradient(135deg, #eef2ff, #f5f3ff);
+      border: 1px solid #c7d2fe;
+      border-radius: 13px;
+      padding: 16px 18px;
+      margin-top: 14px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+    }
+
+    .ppl-left {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .ppl-formula {
+      font-family: var(--mono);
+      font-size: .88rem;
+      color: #3730a3;
+    }
+
+    .ppl-meaning {
+      font-size: .83rem;
+      color: #4338ca;
+    }
+
+    .ppl-nll {
+      font-size: .79rem;
+      color: var(--muted);
+      font-family: var(--mono);
+    }
+
+    .ppl-value {
+      font-size: 2.6rem;
+      font-weight: 800;
+      color: var(--primary);
+      line-height: 1;
+    }
+
+    /* ── Metrics grid ────────────────────────────────────────────────────── */
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .metric-box {
+      background: #f8fafc;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 13px;
+    }
+
+    .metric-label {
+      font-size: .75rem;
+      color: var(--muted);
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+    }
+
+    .metric-value {
+      font-size: 1.28rem;
+      font-weight: 800;
+      color: var(--primary);
+      font-family: var(--mono);
+      margin-top: 2px;
+    }
+
+    .metric-sub {
+      font-size: .72rem;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+
+    /* ── Info panel (compression, bits) ─────────────────────────────────── */
+    .info-panel {
+      background: linear-gradient(135deg, #ecfdf5, #f0fdf4);
+      border: 1px solid #a7f3d0;
+      border-radius: 12px;
+      padding: 14px 16px;
+      margin-top: 12px;
+    }
+
+    .info-panel h4 {
+      margin: 0 0 10px;
+      font-size: .88rem;
+      font-weight: 700;
+      color: #065f46;
+    }
+
+    .info-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .info-item {
+      flex: 1 1 150px;
+    }
+
+    .info-item .il {
+      font-size: .75rem;
+      color: #065f46;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+    }
+
+    .info-item .iv {
+      font-size: 1.1rem;
+      font-weight: 800;
+      color: #059669;
+      font-family: var(--mono);
+    }
+
+    .info-item .is {
+      font-size: .74rem;
+      color: var(--muted);
+      margin-top: 1px;
+    }
+
+    /* ── Section 3 — next-token bars ────────────────────────────────────── */
+    .bars {
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+      margin-top: 10px;
+    }
+
+    .bar-row {
+      display: grid;
+      grid-template-columns: 150px 1fr 72px;
+      align-items: center;
+      gap: 11px;
+      padding: 8px 10px;
+      border-radius: 10px;
+      background: #f8fafc;
+      border: 1px solid transparent;
+      cursor: pointer;
+      transition: border-color .12s, background .12s;
+    }
+
+    .bar-row:hover {
+      border-color: #c7d2fe;
+      background: #f1f5ff;
+    }
+
+    .bar-row.top-pick {
+      background: #eef2ff;
+      border: 1px solid #c7d2fe;
+      font-weight: 700;
+    }
+
+    .bar-track {
+      height: 14px;
+      background: #e2e8f0;
+      border-radius: 999px;
+      overflow: hidden;
+    }
+
+    .bar-fill {
+      height: 100%;
+      border-radius: 999px;
+      background: linear-gradient(90deg, #3b82f6, #8b5cf6);
+    }
+
+    .bar-row.top-pick .bar-fill {
+      background: linear-gradient(90deg, #2563eb, #7c3aed);
+    }
+
+    .bar-pct {
+      text-align: right;
+      font-family: var(--mono);
+      font-size: .87rem;
+    }
+
+    .hint-text {
+      font-size: .83rem;
+      color: var(--muted);
+      margin: 0 0 8px;
+    }
+
+    /* temperature control */
+    .temp-control {
+      background: #f8fafc;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 13px 16px;
+      margin-top: 14px;
+    }
+
+    .temp-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+
+    .temp-label {
+      font-size: .88rem;
+      font-weight: 700;
+      color: #0f172a;
+    }
+
+    .temp-val {
+      font-family: var(--mono);
+      font-size: .95rem;
+      font-weight: 800;
+      color: var(--primary);
+    }
+
+    .temp-desc {
+      font-size: .8rem;
+      color: var(--muted);
+      margin-top: 5px;
+    }
+
+    /* entropy gauge */
+    .ent-gauge-wrap {
+      margin-top: 12px;
+    }
+
+    .ent-gauge-label {
+      font-size: .8rem;
+      font-weight: 600;
+      color: var(--muted);
+      margin-bottom: 4px;
+    }
+
+    .ent-gauge-track {
+      height: 10px;
+      background: #e2e8f0;
+      border-radius: 999px;
+      overflow: hidden;
+    }
+
+    .ent-gauge-fill {
+      height: 100%;
+      border-radius: 999px;
+      background: linear-gradient(90deg, #8b5cf6, #ec4899);
+    }
+
+    .ent-stats {
+      display: flex;
+      gap: 16px;
+      margin-top: 6px;
+      flex-wrap: wrap;
+    }
+
+    .ent-stat {
+      font-size: .82rem;
+      color: var(--muted);
+      font-family: var(--mono);
+    }
+
+    .ent-stat strong {
+      color: var(--text);
+    }
+
+    /* top-p cumulative bar */
+    .topp-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .topp-label {
+      font-size: .8rem;
+      color: var(--muted);
+      min-width: 90px;
+    }
+
+    .topp-track {
+      flex: 1;
+      height: 16px;
+      background: #e2e8f0;
+      border-radius: 999px;
+      overflow: hidden;
+      display: flex;
+    }
+
+    .topp-seg {
+      height: 100%;
+    }
+
+    /* ── Section 4 manual ────────────────────────────────────────────────── */
+    .manual-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .manual-row {
+      display: grid;
+      grid-template-columns: 1fr 100px 1fr auto;
+      gap: 9px;
+      align-items: center;
+    }
+
+    .empty-note {
+      color: var(--muted);
+      font-size: .93rem;
+      margin: 6px 0 0;
+    }
+
+    /* ── Section 5 cheat-sheet ──────────────────────────────────────────── */
+    .cheat-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      margin-top: 14px;
+    }
+
+    @media(max-width:680px) {
+      .cheat-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .cheat-box {
+      background: #f8fafc;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px 16px;
+    }
+
+    .cheat-title {
+      font-size: .78rem;
+      text-transform: uppercase;
+      letter-spacing: .05em;
+      font-weight: 700;
+      color: var(--muted);
+      margin-bottom: 10px;
+    }
+
+    .formula-list {
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+    }
+
+    .f-item {
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 11px;
+      font-family: var(--mono);
+      font-size: .88rem;
+      color: #1e1b6e;
+      line-height: 1.5;
+    }
+
+    .f-item .fi-label {
+      font-size: .74rem;
+      color: var(--muted);
+      display: block;
+      margin-bottom: 2px;
+      font-family: inherit;
+      font-weight: 600;
+    }
+
+    .ppl-scale-bar {
+      display: flex;
+      border-radius: 10px;
+      overflow: hidden;
+      height: 34px;
+      margin: 12px 0;
+    }
+
+    .pss {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: .7rem;
+      font-weight: 700;
+      color: #fff;
+      text-shadow: 0 1px 2px rgba(0, 0, 0, .3);
+    }
+
+    .bench-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: .87rem;
+      margin-top: 8px;
+    }
+
+    .bench-table th,
+    .bench-table td {
+      padding: 8px 10px;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .bench-table th {
+      font-size: .77rem;
+      text-transform: uppercase;
+      color: var(--muted);
+      background: #f8fafc;
+    }
+
+    /* ── Step-by-Step Navigation Bar ───────────────────────────────────── */
+    .stepper-bar {
+      position: sticky;
+      top: 10px;
+      z-index: 50;
+      background: rgba(255, 255, 255, .94);
+      backdrop-filter: blur(8px);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 10px 12px;
+      box-shadow: 0 6px 20px rgba(15, 23, 42, .07);
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .stepper-steps {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      flex: 1;
+    }
+
+    .step-tab {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 7px 11px;
+      border-radius: 10px;
+      background: #f8fafc;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      font-size: .83rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all .15s;
+    }
+
+    .step-tab:hover {
+      border-color: #c7d2fe;
+      color: var(--text);
+      background: #f1f5ff;
+    }
+
+    .step-tab.active {
+      background: linear-gradient(135deg, #2563eb, #7c3aed);
+      color: #fff;
+      border-color: transparent;
+      box-shadow: 0 3px 10px rgba(79, 70, 229, .22);
+    }
+
+    .step-tab .st-num {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 19px;
+      height: 19px;
+      border-radius: 6px;
+      font-size: .73rem;
+      font-weight: 800;
+      background: rgba(15, 23, 42, .08);
+      color: inherit;
+    }
+
+    .step-tab.active .st-num {
+      background: rgba(255, 255, 255, .22);
+    }
+
+    .step-tab .st-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--success);
+      display: none;
+    }
+
+    .step-tab.has-data .st-dot {
+      display: inline-block;
+    }
+
+    .step-tab.active .st-dot {
+      background: #a7f3d0;
+    }
+
+    .view-toggle {
+      background: var(--soft-purple);
+      color: var(--accent);
+      border: 1px solid #ddd6fe;
+      padding: 7px 11px;
+      border-radius: 10px;
+      font-size: .8rem;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .view-toggle:hover {
+      background: #ede9fe;
+    }
+
+    /* Section visibility in Step-by-Step mode */
+    .container.step-mode section.card {
+      display: none;
+    }
+
+    .container.step-mode section.card.step-active {
+      display: block;
+      animation: fadeUp .25s ease both;
+    }
+
+    .container:not(.step-mode) .step-footer {
+      display: none;
+    }
+
+    .container:not(.step-mode) .context-banner {
+      display: none !important;
+    }
+
+    /* Friendly section intro & footer */
+    .step-intro {
+      margin: -6px 0 14px;
+      font-size: .9rem;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+
+    .step-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-top: 20px;
+      padding-top: 14px;
+      border-top: 1px solid var(--border);
+    }
+
+    .btn-nav {
+      background: #f8fafc;
+      color: var(--text);
+      border: 1px solid var(--border);
+      padding: 8px 14px;
+      font-size: .87rem;
+      font-weight: 600;
+      border-radius: 10px;
+    }
+
+    .btn-nav:hover {
+      background: #f1f5f9;
+      border-color: #cbd5e1;
+    }
+
+    .btn-nav-next {
+      background: linear-gradient(135deg, #2563eb, #7c3aed);
+      color: #fff;
+      border: none;
+      box-shadow: 0 3px 10px rgba(79, 70, 229, .2);
+    }
+
+    .btn-nav-next:hover {
+      filter: brightness(1.07);
+    }
+
+    /* Active sentence context banner for Steps 2 & 3 */
+    .context-banner {
+      display: none;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 8px;
+      background: var(--soft-blue);
+      border: 1px solid #c7d2fe;
+      border-radius: 10px;
+      padding: 8px 12px;
+      margin-bottom: 14px;
+      font-size: .86rem;
+      color: #1e1b6e;
+    }
+
+    .context-banner.visible {
+      display: flex;
+    }
+
+    .context-banner button {
+      padding: 5px 10px;
+      font-size: .8rem;
+      border-radius: 8px;
+    }
+
+    /* Sub-tabs inside results (Math / Charts / Deep Dive) */
+    .subtabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin: 14px 0 12px;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 10px;
+    }
+
+    .subtab-btn {
+      background: #f8fafc;
+      color: var(--muted);
+      border: 1px solid var(--border);
+      padding: 7px 13px;
+      border-radius: 9px;
+      font-size: .84rem;
+      font-weight: 600;
+    }
+
+    .subtab-btn:hover {
+      background: #f1f5ff;
+      color: var(--text);
+    }
+
+    .subtab-btn.active {
+      background: var(--soft-blue);
+      color: var(--primary);
+      border-color: #c7d2fe;
+    }
+
+    .subtab-pane {
+      display: none;
+    }
+
+    .subtab-pane.active {
+      display: block;
+      animation: fadeUp .2s ease both;
+    }
+
+    .strip-legend {
+      font-size: .77rem;
+      color: var(--muted);
+      margin: -4px 0 12px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .strip-legend span {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .leg-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+
+    /* ── Interactive 3D WebGL Stage ────────────────────────────────────── */
+    .stage-3d-card {
+      position: relative;
+      background: linear-gradient(145deg, #ffffff 0%, #f5f7ff 100%);
+      border: 1px solid rgba(199, 210, 254, .9);
+      border-radius: 20px;
+      padding: 14px 16px;
+      box-shadow: var(--shadow-3d);
+      overflow: hidden;
+    }
+
+    .stage-3d-top {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+
+    .stage-3d-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: .94rem;
+      font-weight: 800;
+      color: #0f172a;
+    }
+
+    .stage-3d-dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #2563eb, #7c3aed);
+      box-shadow: 0 0 10px rgba(79, 70, 229, .55);
+    }
+
+    .stage-3d-controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      align-items: center;
+    }
+
+    .stage-btn {
+      background: #fff;
+      color: #334155;
+      border: 1px solid #cbd5e1;
+      border-bottom: 2px solid #94a3b8;
+      padding: 5px 10px;
+      border-radius: 9px;
+      font-size: .77rem;
+      font-weight: 700;
+    }
+
+    .stage-btn:hover {
+      background: #f1f5ff;
+      color: var(--primary);
+      border-color: #a5b4fc;
+    }
+
+    .stage-btn.active {
+      background: var(--soft-blue);
+      color: var(--primary);
+      border-color: #818cf8;
+      border-bottom-color: #6366f1;
+    }
+
+    .stage-viewport {
+      position: relative;
+      width: 100%;
+      height: 300px;
+      border-radius: 14px;
+      overflow: hidden;
+      background: radial-gradient(circle at 50% 35%, #ffffff 0%, #e8eeff 62%, #dbe4ff 100%);
+      border: 1px solid rgba(199, 210, 254, .8);
+      box-shadow: inset 0 2px 14px rgba(79, 70, 229, .08);
+      cursor: grab;
+    }
+
+    .stage-viewport:active {
+      cursor: grabbing;
+    }
+
+    .stage-viewport canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      outline: none;
+    }
+
+    .stage-hud {
+      position: absolute;
+      left: 12px;
+      bottom: 10px;
+      pointer-events: none;
+      background: rgba(255, 255, 255, .84);
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(203, 213, 225, .8);
+      border-radius: 9px;
+      padding: 4px 10px;
+      font-size: .75rem;
+      font-weight: 600;
+      color: #475569;
+    }
+
+    .stage-tooltip {
+      position: absolute;
+      pointer-events: none;
+      display: none;
+      z-index: 10;
+      background: rgba(15, 23, 42, .92);
+      color: #fff;
+      border-radius: 10px;
+      padding: 7px 11px;
+      font-size: .78rem;
+      line-height: 1.4;
+      box-shadow: 0 10px 25px rgba(15, 23, 42, .28);
+      border: 1px solid rgba(255, 255, 255, .15);
+      backdrop-filter: blur(6px);
+    }
+
+    .stage-tooltip strong {
+      color: #a5b4fc;
+      font-family: var(--mono);
+    }
+
+    .stage-3d-card.collapsed .stage-viewport {
+      display: none;
+    }
+
+    @media(max-width:680px) {
+      .bar-row {
+        grid-template-columns: 100px 1fr 60px;
+      }
+
+      .manual-row {
+        grid-template-columns: 1fr 85px auto;
+      }
+
+      .manual-row input[type="range"] {
+        display: none;
+      }
+
+      .deriv-grid,
+      .cheat-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container step-mode" id="main-container">
+
+    <!-- ══════════════════════════════════════════════════════════
+     HEADER
+══════════════════════════════════════════════════════════ -->
+    <header>
+      <h1>Perplexity Explorer</h1>
+      <p class="sub">Learn how language models measure surprise — step by step, right in your browser.</p>
+      <div class="hero-row">
+        <div class="formula-pill">
+          PPL(W) = exp(−<sup>1</sup>/<sub>N</sub> Σ log P(wᵢ|w&lt;ᵢ))
+          &nbsp;=&nbsp; (∏ᵢ 1/P(wᵢ|w&lt;ᵢ))<sup>1/N</sup>
+        </div>
+        <button class="btn-info" id="math-info-btn">📖 The Mathematics of Perplexity</button>
+      </div>
+    </header>
+
+    <!-- ══════════════════════════════════════════════════════════
+     STEP-BY-STEP NAVIGATION BAR
+══════════════════════════════════════════════════════════ -->
+    <nav class="stepper-bar" aria-label="Explorer steps">
+      <div class="stepper-steps">
+        <button type="button" class="step-tab active" data-step="1"><span class="st-num">1</span>Type Sentence</button>
+        <button type="button" class="step-tab" data-step="2"><span class="st-num">2</span>Token Perplexity <span
+            class="st-dot"></span></button>
+        <button type="button" class="step-tab" data-step="3"><span class="st-num">3</span>Next-Word AI <span
+            class="st-dot"></span></button>
+        <button type="button" class="step-tab" data-step="4"><span class="st-num">4</span>Try by Hand</button>
+        <button type="button" class="step-tab" data-step="5"><span class="st-num">5</span>Cheat Sheet</button>
+      </div>
+      <button type="button" class="view-toggle" id="view-toggle-btn"
+        title="Switch between one step at a time and all sections">Show All Sections</button>
+    </nav>
+
+    <!-- ══════════════════════════════════════════════════════════
+     INTERACTIVE 3D WEBGL STAGE (Three.js)
+══════════════════════════════════════════════════════════ -->
+    <div class="stage-3d-card" id="stage-3d-card">
+      <div class="stage-3d-top">
+        <div class="stage-3d-title">
+          <span class="stage-3d-dot"></span>
+          <span>3D Perplexity Stage</span>
+          <span class="badge badge-blue" id="stage-3d-mode">Neural Core</span>
+        </div>
+        <div class="stage-3d-controls">
+          <button type="button" class="stage-btn active" id="btn-3d-metric"
+            title="Toggle 3D pillar height between Surprisal (−ln P) and Probability (P)">Height: Surprisal</button>
+          <button type="button" class="stage-btn active" id="btn-3d-orbit">Auto-Orbit</button>
+          <button type="button" class="stage-btn" id="btn-3d-reset">Reset Camera</button>
+          <button type="button" class="stage-btn" id="btn-3d-collapse">Hide 3D</button>
+        </div>
+      </div>
+      <div class="stage-viewport" id="stage-viewport">
+        <canvas id="three-canvas"></canvas>
+        <div class="stage-hud" id="stage-hud">Drag to rotate · Scroll to zoom · Hover 3D pillars to inspect</div>
+        <div class="stage-tooltip" id="stage-tooltip"></div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════
+     MATH MODAL
+══════════════════════════════════════════════════════════ -->
+    <div class="modal-overlay" id="math-modal" role="dialog" aria-modal="true">
+      <div class="modal">
+        <div class="modal-top">
+          <h2>📖 &nbsp;The Mathematics of Perplexity</h2>
+          <button class="modal-close" id="modal-close-btn">✕</button>
+        </div>
+        <p style="font-size:.92rem;color:var(--muted);margin:0 0 4px">
+          <strong style="color:var(--text)">Perplexity (PPL)</strong> is the standard NLP metric for how well a
+          probability model predicts a sample sequence.
+        </p>
+
+        <!-- Form 1 — geometric mean of inverses -->
+        <div class="m-box">
+          PPL(W) = <sup>N</sup>√(∏ᵢ₌₁ᴺ 1/P(wᵢ|w&lt;ᵢ)) = e<sup>ℒ</sup> = 2<sup>ℒ<sub>bits</sub></sup>
+        </div>
+
+        <div class="m-sec">
+          <h3>1. As the Geometric Mean of Inverses</h3>
+          <p>Each token has a conditional probability P(wᵢ|w₁…wᵢ₋₁). Perplexity is the geometric mean of all 1/P values
+            — equivalently, the branching factor the model faced on average.</p>
+        </div>
+
+        <div class="m-sec">
+          <h3>2. Relationship to Cross-Entropy Loss</h3>
+          <p>The two forms are mathematically identical:</p>
+          <div class="m-box" style="font-size:.88rem;">
+            ℒ = −<sup>1</sup>/<sub>N</sub> Σ ln P(wᵢ|w&lt;ᵢ) &nbsp;&nbsp;⟹&nbsp;&nbsp; PPL = e<sup>ℒ</sup><br />
+            Proof: (∏ 1/P)<sup>1/N</sup> = exp(1/N · Σ ln(1/P)) = exp(1/N · Σ −lnP) = exp(ℒ)
+          </div>
+        </div>
+
+        <div class="m-sec">
+          <h3>3. Five Equivalent Forms</h3>
+          <div class="formula-list" style="margin-top:8px;">
+            <div class="f-item"><span class="fi-label">Canonical (log-space, numerically safe)</span>PPL = exp( −(1/N)
+              Σᵢ log P(wᵢ|w&lt;ᵢ) )</div>
+            <div class="f-item"><span class="fi-label">Geometric mean of inverses (image formula)</span>PPL = ( ∏ᵢ
+              1/P(wᵢ|w&lt;ᵢ) )^(1/N)</div>
+            <div class="f-item"><span class="fi-label">Exponentiated cross-entropy</span>PPL = e^ℒ &nbsp;&nbsp; where ℒ
+              = mean −ln P</div>
+            <div class="f-item"><span class="fi-label">Base-2 version</span>PPL = 2^H &nbsp;&nbsp; where H = mean −log₂P
+              (bits/token)</div>
+            <div class="f-item"><span class="fi-label">Inverse joint probability</span>PPL = P(w₁,…,wₙ)^(−1/N)</div>
+          </div>
+        </div>
+
+        <div class="m-sec">
+          <h3>4. The "Effective Vocabulary" Intuition</h3>
+          <p>PPL = K means the model was, on average, as confused as picking uniformly from K words at each step.</p>
+          <div class="ppl-scale-bar">
+            <div class="pss" style="width:5%;background:#059669;">1</div>
+            <div class="pss" style="width:20%;background:#34d399;">2–10</div>
+            <div class="pss" style="width:25%;background:#fbbf24;">10–30</div>
+            <div class="pss" style="width:25%;background:#f97316;">30–200</div>
+            <div class="pss" style="width:25%;background:#dc2626;">200+</div>
+          </div>
+          <ul>
+            <li><strong>PPL = 1:</strong> Perfect certainty — predicted every token with 100% probability.</li>
+            <li><strong>PPL 2–10:</strong> Very predictable text (repetitive, formulaic).</li>
+            <li><strong>PPL 10–30:</strong> Excellent — modern LLMs on natural English text.</li>
+            <li><strong>PPL 30–200:</strong> Poor — unusual wording or domain shift.</li>
+            <li><strong>PPL = vocab_size:</strong> Random guessing (distilgpt2 vocab: 50,257).</li>
+          </ul>
+        </div>
+
+        <div class="m-sec">
+          <h3>5. Information-Theoretic Connection</h3>
+          <p>Cross-entropy H = ln(PPL) is the average number of <em>nats</em> needed to encode each token. In bits:
+            log₂(PPL). A lower-PPL model achieves better compression.</p>
+        </div>
+
+        <button class="modal-ok" id="modal-ok-btn">Got it, let's explore</button>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════
+     SECTION 1 — Input
+══════════════════════════════════════════════════════════ -->
+    <section class="card step-active" id="section-1">
+      <div class="card-header">
+        <h2><span class="section-num">1</span>Type a sentence</h2>
+        <span class="badge badge-blue" id="timing-badge" style="display:none"></span>
+      </div>
+      <p class="step-intro">Pick a sample or type any sentence, then click <strong>Calculate perplexity</strong>. The AI
+        model (distilgpt2) runs locally in your browser.</p>
+      <label for="sentence-input">Sentence</label>
+      <input type="text" id="sentence-input" value="I love Python" placeholder="Type a sentence and press Enter…" />
+      <div class="row">
+        <span style="font-size:.85rem;color:var(--muted);font-weight:600">Samples:</span>
+        <button class="btn-sample" data-sample="I love Python">I love Python</button>
+        <button class="btn-sample" data-sample="Python love I">Python love I</button>
+        <button class="btn-sample" data-sample="The capital of France is Paris">The capital of France is Paris</button>
+        <button class="btn-sample" data-sample="To be or not to be">To be or not to be</button>
+        <button class="btn-sample" data-sample="xkq mwz pft blr">xkq mwz pft blr</button>
+      </div>
+      <div class="row">
+        <button class="btn-primary" id="calc-btn">Calculate perplexity</button>
+        <button type="button" class="btn-secondary" data-goto="4">No download? Try Step 4 by Hand →</button>
+      </div>
+      <div class="status" id="model-status">Model not loaded yet — click "Calculate perplexity" to start (~83 MB
+        one-time download).</div>
+      <div class="progress-wrap" id="progress-wrap">
+        <div class="progress-bar" id="progress-bar"></div>
+      </div>
+      <div class="history-wrap" id="history-wrap">
+        <div class="history-title">Recent runs — click to re-run and compare</div>
+        <div class="history-chips" id="history-chips"></div>
+      </div>
+      <div class="step-footer">
+        <span style="font-size:.83rem;color:var(--muted)">Step 1 of 5</span>
+        <button type="button" class="btn-nav btn-nav-next" data-goto="2">Next: Token Perplexity →</button>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════════════
+     SECTION 2 — Per-token analysis
+══════════════════════════════════════════════════════════ -->
+    <section class="card" id="section-2">
+      <div class="card-header">
+        <h2><span class="section-num">2</span>Probability of each token → perplexity</h2>
+      </div>
+      <p class="step-intro">See how surprised the AI was by each word/token. Lower perplexity means the sentence felt
+        more natural and predictable.</p>
+      <div class="context-banner" id="ctx-banner-2">
+        <span>Analyzing: <strong id="ctx-sent-2"></strong></span>
+        <button type="button" class="btn-secondary" data-goto="1">← Change sentence</button>
+      </div>
+      <div id="model-results">
+        <p class="empty-note">Run a sentence in Step 1 to see the full per-token analysis.</p>
+      </div>
+      <div class="step-footer">
+        <button type="button" class="btn-nav" data-goto="1">← Back: Type Sentence</button>
+        <button type="button" class="btn-nav btn-nav-next" data-goto="3">Next: What Comes Next? →</button>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════════════
+     SECTION 3 — Next-token predictions + temperature
+══════════════════════════════════════════════════════════ -->
+    <section class="card" id="section-3">
+      <div class="card-header">
+        <h2><span class="section-num">3</span>What does the model predict next?</h2>
+        <span class="badge badge-blue" id="top8-badge" style="display:none"></span>
+      </div>
+      <p class="step-intro">See the top 8 words the model expects next. Click any bar to append it, or drag the
+        Temperature slider to see how randomness changes.</p>
+      <div class="context-banner" id="ctx-banner-3">
+        <span>Predicting after: <strong id="ctx-sent-3"></strong></span>
+        <button type="button" class="btn-secondary" data-goto="1">← Change sentence</button>
+      </div>
+      <div id="next-token-results">
+        <p class="empty-note">Run a sentence in Step 1 to see next-token predictions.</p>
+      </div>
+      <div class="step-footer">
+        <button type="button" class="btn-nav" data-goto="2">← Back: Token Perplexity</button>
+        <button type="button" class="btn-nav btn-nav-next" data-goto="4">Next: Try It by Hand →</button>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════════════
+     SECTION 4 — Manual sandbox
+══════════════════════════════════════════════════════════ -->
+    <section class="card" id="section-4">
+      <div class="card-header">
+        <h2><span class="section-num">4</span>Try it by hand</h2>
+        <span class="badge">Simulated, not from the model</span>
+      </div>
+      <p class="step-intro">Experiment with your own token probabilities (no AI download required). Watch how one
+        surprising word spikes perplexity!</p>
+      <div class="row" style="margin-top:0">
+        <span style="font-size:.85rem;color:var(--muted);font-weight:600">Presets:</span>
+        <button class="btn-secondary" id="preset-love">I love Python</button>
+        <button class="btn-secondary" id="preset-eighth">All 1/8</button>
+        <button class="btn-secondary" id="preset-surprise">One surprising word</button>
+        <button class="btn-secondary" id="preset-uniform5">Uniform 1/5</button>
+        <button class="btn-secondary" id="preset-certain">Near-certain</button>
+      </div>
+      <div class="manual-list" id="manual-rows"></div>
+      <div class="row">
+        <button class="btn-primary" id="add-token-btn">+ Add token</button>
+      </div>
+      <div id="manual-results" style="margin-top:16px"></div>
+      <div class="step-footer">
+        <button type="button" class="btn-nav" data-goto="3">← Back: Next-Word AI</button>
+        <button type="button" class="btn-nav btn-nav-next" data-goto="5">Next: Cheat Sheet →</button>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════════════
+     SECTION 5 — Reference cheat-sheet
+══════════════════════════════════════════════════════════ -->
+    <section class="card" id="section-5">
+      <div class="card-header">
+        <h2><span class="section-num">5</span>Reference &amp; Cheat Sheet</h2>
+        <span class="badge badge-green">Always useful</span>
+      </div>
+      <p class="step-intro">A quick-reference summary of every perplexity formula and what different perplexity scores
+        mean in practice.</p>
+      <div class="cheat-grid">
+        <!-- All five equivalent formulas -->
+        <div class="cheat-box">
+          <div class="cheat-title">Five Equivalent Perplexity Formulas</div>
+          <div class="formula-list">
+            <div class="f-item"><span class="fi-label">① Canonical / log-space (what we compute)</span>PPL = exp( mean
+              of −ln P(wᵢ|w&lt;ᵢ) )</div>
+            <div class="f-item"><span class="fi-label">② Geometric mean of inverses (image)</span>PPL = (∏ᵢ
+              1/P(wᵢ|w&lt;ᵢ))^(1/N)</div>
+            <div class="f-item"><span class="fi-label">③ Exponentiated cross-entropy</span>PPL = e<sup>ℒ</sup>
+              &nbsp;where ℒ = −(1/N) Σ ln P</div>
+            <div class="f-item"><span class="fi-label">④ Base-2 (bits-per-token)</span>PPL = 2<sup>H</sup> &nbsp;where H
+              = mean −log₂P</div>
+            <div class="f-item"><span class="fi-label">⑤ Joint probability view</span>PPL = P(w₁,w₂,…,wₙ)^(−1/N)</div>
+          </div>
+        </div>
+        <!-- PPL ↔ entropy relationships -->
+        <div class="cheat-box">
+          <div class="cheat-title">PPL ↔ Cross-Entropy Relationships</div>
+          <div class="formula-list">
+            <div class="f-item"><span class="fi-label">Cross-entropy in nats → PPL</span>PPL = e^H_nats &nbsp;(H_nats =
+              ln PPL)</div>
+            <div class="f-item"><span class="fi-label">Cross-entropy in bits → PPL</span>PPL = 2^H_bits &nbsp;(H_bits =
+              log₂ PPL)</div>
+            <div class="f-item"><span class="fi-label">Bits-per-character (BPC)</span>BPC = H_bits / chars_per_token
+            </div>
+            <div class="f-item"><span class="fi-label">If all tokens equally likely with prob P</span>PPL = 1/P =
+              vocab_size</div>
+            <div class="f-item"><span class="fi-label">Uniform over K words → PPL</span>PPL = K &nbsp;(e.g. 8 words →
+              PPL = 8)</div>
+          </div>
+        </div>
+        <!-- PPL scale -->
+        <div class="cheat-box" style="grid-column:1/-1">
+          <div class="cheat-title">PPL Scale &amp; Intuitions</div>
+          <div class="ppl-scale-bar">
+            <div class="pss" style="width:4%;background:#059669;font-size:.6rem">1</div>
+            <div class="pss" style="width:10%;background:#34d399;">~5</div>
+            <div class="pss" style="width:20%;background:#fbbf24;">~20</div>
+            <div class="pss" style="width:20%;background:#f97316;">~50</div>
+            <div class="pss" style="width:20%;background:#ef4444;">~200</div>
+            <div class="pss" style="width:26%;background:#991b1b;font-size:.6rem">50,257 (random)</div>
+          </div>
+          <table class="bench-table">
+            <thead>
+              <tr>
+                <th>PPL Range</th>
+                <th>Interpretation</th>
+                <th>Example</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="mono">1.0</td>
+                <td>Perfect certainty at every step</td>
+                <td>Impossible in practice</td>
+              </tr>
+              <tr>
+                <td class="mono">2–5</td>
+                <td>Extremely predictable</td>
+                <td>Repetitive / formulaic text</td>
+              </tr>
+              <tr>
+                <td class="mono">10–20</td>
+                <td>Excellent — state-of-the-art LLMs</td>
+                <td>GPT-4 on natural English</td>
+              </tr>
+              <tr>
+                <td class="mono">20–50</td>
+                <td>Good — still fluent</td>
+                <td>GPT-2 Small on Wikipedia</td>
+              </tr>
+              <tr>
+                <td class="mono">50–200</td>
+                <td>Poor — unusual / out-of-domain</td>
+                <td>Domain shift, typos</td>
+              </tr>
+              <tr>
+                <td class="mono">200+</td>
+                <td>Very poor — near random to the model</td>
+                <td>Random tokens, wrong language</td>
+              </tr>
+              <tr>
+                <td class="mono">50,257</td>
+                <td>Completely random (uniform over vocab)</td>
+                <td>Worst possible for distilgpt2</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="step-footer">
+        <button type="button" class="btn-nav" data-goto="4">← Back: Try It by Hand</button>
+        <button type="button" class="btn-nav btn-nav-next" data-goto="1">↺ Back to Step 1</button>
+      </div>
+    </section>
+
+  </div><!-- /container -->
+
+  <script type="module">
+    /* ═══════════════════════════════════════════════════════════════════════
+       PERPLEXITY EXPLORER — single file, no backend, no API key
+       Model: Xenova/distilgpt2 (q8) via Transformers.js v3
+    
+       THE FORMULA — BOTH FORMS, PROVEN EQUIVALENT:
+       ─────────────────────────────────────────────
+       FORM 1 (geometric mean of inverses — image formula):
+         PPL(W) = ( ∏ᵢ₌₁ᴺ 1/P(wᵢ|w<ᵢ) ) ^ (1/N)
+    
+       FORM 2 (exponentiated cross-entropy — how we compute it):
+         ℒ   = −(1/N) Σᵢ ln P(wᵢ|w<ᵢ)        ← mean negative log-likelihood
+         PPL = exp(ℒ)
+    
+       PROOF THEY'RE IDENTICAL:
+         (∏ᵢ 1/Pᵢ)^(1/N) = exp((1/N)·Σᵢ ln(1/Pᵢ)) = exp((1/N)·Σᵢ −lnPᵢ) = exp(ℒ) ✓
+       ═══════════════════════════════════════════════════════════════════════ */
+
+    import { AutoTokenizer, AutoModelForCausalLM, Tensor }
+      from "https://cdn.jsdelivr.net/npm/@huggingface/transformers@3";
+
+    /* ── State ──────────────────────────────────────────────────────────── */
+    let tokenizer = null;   // cached after first load
+    let model = null;   // cached after first load
+    let isLoading = false;
+    let lastRawLogits = null;   // stored for temperature slider (Section 3)
+    let lastVocabSize = 0;
+    const recentRuns = [];
+
+    const MAX_ENTROPY_NATS = Math.log(50257); // ln(vocab_size) — theoretical max
+
+    /* ── DOM refs ───────────────────────────────────────────────────────── */
+    const sentenceInput = document.getElementById("sentence-input");
+    const calcBtn = document.getElementById("calc-btn");
+    const statusEl = document.getElementById("model-status");
+    const progressWrap = document.getElementById("progress-wrap");
+    const progressBar = document.getElementById("progress-bar");
+    const timingBadge = document.getElementById("timing-badge");
+    const historyWrap = document.getElementById("history-wrap");
+    const historyChips = document.getElementById("history-chips");
+    const modelResultsEl = document.getElementById("model-results");
+    const nextTokenResEl = document.getElementById("next-token-results");
+    const top8Badge = document.getElementById("top8-badge");
+
+    /* ── Modal ──────────────────────────────────────────────────────────── */
+    const mathModal = document.getElementById("math-modal");
+    const openModal = () => mathModal.classList.add("open");
+    const closeModal = () => mathModal.classList.remove("open");
+    document.getElementById("math-info-btn").onclick = openModal;
+    document.getElementById("modal-close-btn").onclick = closeModal;
+    document.getElementById("modal-ok-btn").onclick = closeModal;
+    mathModal.onclick = e => { if (e.target === mathModal) closeModal(); };
+
+    /* ════════════════════════════════════════════════════════════════════
+       UTILITY FUNCTIONS
+    ════════════════════════════════════════════════════════════════════ */
+
+    // Show spaces/newlines as visible characters
+    function visToken(text) {
+      return text.replace(/ /g, "␣").replace(/\n/g, "↵").replace(/\t/g, "⇥");
+    }
+
+    // Escape HTML to safely insert user/model text into innerHTML
+    function esc(str) {
+      return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    }
+
+    /* Numerically stable softmax over a typed array slice.
+       Subtract max logit first so exp() never overflows. */
+    function softmax(slice) {
+      let max = -Infinity;
+      for (let i = 0; i < slice.length; i++) if (slice[i] > max) max = slice[i];
+      const e = new Float64Array(slice.length);
+      let Z = 0;
+      for (let i = 0; i < slice.length; i++) { e[i] = Math.exp(slice[i] - max); Z += e[i]; }
+      for (let i = 0; i < e.length; i++) e[i] /= Z;
+      return e;
+    }
+
+    /* Temperature-scaled softmax: divide logits by T before softmax.
+       T → 0: peaks at max logit (more confident)
+       T → ∞: approaches uniform (more uncertain)   */
+    function softmaxT(slice, T) {
+      if (T === 1) return softmax(slice);
+      const scaled = new Float32Array(slice.length);
+      for (let i = 0; i < slice.length; i++) scaled[i] = slice[i] / T;
+      return softmax(scaled);
+    }
+
+    /* Top-K selection without full sort — O(V·K) but simple */
+    function topK(probs, k) {
+      const h = [];
+      for (let id = 0; id < probs.length; id++) {
+        const p = probs[id];
+        if (h.length < k || p > h[h.length - 1].prob) {
+          h.push({ id, prob: p });
+          h.sort((a, b) => b.prob - a.prob);
+          if (h.length > k) h.pop();
+        }
+      }
+      return h;
+    }
+
+    /* Entropy of a probability distribution: H = −Σ p ln p (nats) */
+    function entropy(probs) {
+      let H = 0;
+      for (let i = 0; i < probs.length; i++) {
+        if (probs[i] > 1e-15) H -= probs[i] * Math.log(probs[i]);
+      }
+      return H;
+    }
+
+    /* Rank of a specific token id among all vocab, given probs (1-indexed) */
+    function tokenRank(probs, tid) {
+      const ap = probs[tid];
+      let rank = 1;
+      for (let j = 0; j < probs.length; j++) if (probs[j] > ap) rank++;
+      return rank;
+    }
+
+    /* Formatting helpers */
+    function fmtP(p) { return p >= 0.001 ? p.toFixed(4) : p.toExponential(2); }
+    function fmtNLP(v) { return v.toFixed(4); }
+    function fmtInvP(v) { return v >= 10000 ? v.toExponential(2) : v.toFixed(2); }
+    function fmtPPL(p) { return !Number.isFinite(p) ? "∞" : p >= 1000 ? p.toFixed(0) : p.toFixed(2); }
+    function fmtRank(r) {
+      if (r === 1) return `<span class="rank-pill rank-1">🥇 #1</span>`;
+      if (r <= 10) return `<span class="rank-pill rank-top10">#${r}</span>`;
+      return `<span class="rank-pill rank-other">#${r.toLocaleString()}</span>`;
+    }
+
+    /* Colour for surprisal value (green = expected, red = surprised) */
+    function surprisalColor(nlp) {
+      const t = Math.min(1, nlp / 6); // 0 → green, 6+ → red
+      if (t < 0.33) return `hsl(${Math.round(140 - t * 3 * 140)}, 72%, 42%)`;    // green → yellow
+      if (t < 0.66) return `hsl(${Math.round(140 - t * 3 * 140)}, 80%, 42%)`;    // yellow → orange
+      return `hsl(${Math.round(360 - t * 120)}, 80%, 40%)`;                       // orange → red
+    }
+
+    function probClass(p) {
+      return p >= 0.20 ? "prob-high" : p >= 0.03 ? "prob-mid" : "prob-low";
+    }
+
+    function describePPL(ppl) {
+      if (ppl < 2) return "Near-perfect — model is almost certain at every step.";
+      if (ppl < 10) return "Extremely predictable — very formulaic or repetitive text.";
+      if (ppl < 25) return "Natural phrasing — equivalent to ~" + Math.round(ppl) + " equally likely choices per token.";
+      if (ppl < 80) return "Somewhat surprising — unusual wording or specific facts.";
+      if (ppl < 500) return "Very surprising — the model rarely expects this sequence.";
+      return "Extremely surprising — far outside the model's training distribution.";
+    }
+
+    /* ════════════════════════════════════════════════════════════════════
+       SVG CHART 1 — Surprisal Timeline
+       Bar chart: X = token position, Y = −ln P (surprise in nats)
+       Colour gradient: green (expected) → red (surprised)
+       Dashed line at mean = cross-entropy ℒ
+    ════════════════════════════════════════════════════════════════════ */
+    function renderSurprisalSVG(rows) {
+      const N = rows.length;
+      const W = Math.max(700, N * 72);
+      const SH = 200; // svg height
+      const pL = 52, pR = 20, pT = 22, pB = 56;
+      const cW = W - pL - pR;
+      const cH = SH - pT - pB;
+
+      const maxNLP = Math.max(...rows.map(r => r.nlp), 1);
+      const meanNLP = rows.reduce((s, r) => s + r.nlp, 0) / N;
+      const bW = Math.max(28, Math.min(60, cW / N * 0.68));
+      const slot = cW / N;
+
+      let bars = '', nums = '', labels = '';
+      rows.forEach((r, i) => {
+        const cx = pL + i * slot + slot / 2;
+        const bH = (r.nlp / maxNLP) * cH;
+        const by = pT + cH - bH;
+        const col = surprisalColor(r.nlp);
+        bars += `<rect x="${(cx - bW / 2).toFixed(1)}" y="${by.toFixed(1)}"
+      width="${bW}" height="${bH.toFixed(1)}" fill="${col}" rx="4" opacity=".92"/>`;
+        // number on top of bar
+        nums += `<text x="${cx.toFixed(1)}" y="${(by - 4).toFixed(1)}"
+      text-anchor="middle" font-size="10" fill="#374151" font-family="monospace">${r.nlp.toFixed(2)}</text>`;
+        // token label rotated
+        const lbl = esc(r.label).substring(0, 10);
+        labels += `<text transform="rotate(-38, ${cx.toFixed(1)}, ${(pT + cH + 14).toFixed(1)})"
+      x="${cx.toFixed(1)}" y="${(pT + cH + 14).toFixed(1)}"
+      text-anchor="end" font-size="11" fill="#374151" font-family="monospace">${lbl}</text>`;
+      });
+
+      const meanY = (pT + cH - (meanNLP / maxNLP) * cH).toFixed(1);
+
+      // Y-axis ticks
+      let yTicks = '';
+      for (let v = 0; v <= maxNLP; v += Math.max(1, Math.round(maxNLP / 4))) {
+        const ty = (pT + cH - (v / maxNLP) * cH).toFixed(1);
+        yTicks += `<line x1="${pL - 4}" y1="${ty}" x2="${pL}" y2="${ty}" stroke="#94a3b8" stroke-width="1"/>
+      <text x="${pL - 6}" y="${parseFloat(ty) + 4}" text-anchor="end" font-size="9" fill="#94a3b8">${v.toFixed(1)}</text>`;
+      }
+
+      return `<svg viewBox="0 0 ${W} ${SH}" xmlns="http://www.w3.org/2000/svg"
+    style="width:100%;min-width:${W}px;display:block">
+    <!-- axes -->
+    <line x1="${pL}" y1="${pT}" x2="${pL}" y2="${pT + cH}" stroke="#e2e8f0" stroke-width="1"/>
+    <line x1="${pL}" y1="${pT + cH}" x2="${pL + cW}" y2="${pT + cH}" stroke="#e2e8f0" stroke-width="1"/>
+    <!-- y-axis label -->
+    <text transform="rotate(-90,14,${pT + cH / 2})" x="14" y="${pT + cH / 2 + 4}"
+      text-anchor="middle" font-size="10" fill="#94a3b8">−ln P</text>
+    ${yTicks}
+    ${bars}
+    ${nums}
+    ${labels}
+    <!-- mean / cross-entropy line -->
+    <line x1="${pL}" y1="${meanY}" x2="${pL + cW}" y2="${meanY}"
+      stroke="#7c3aed" stroke-width="1.6" stroke-dasharray="6,3"/>
+    <text x="${pL + cW + 2}" y="${parseFloat(meanY) + 4}" font-size="10" fill="#7c3aed" font-weight="bold">ℒ=${meanNLP.toFixed(3)}</text>
+    <!-- title -->
+    <text x="${pL}" y="13" font-size="11" fill="#64748b" font-weight="600">Surprisal −ln P per token (purple dashed = mean = cross-entropy ℒ)</text>
+  </svg>`;
+    }
+
+    /* ════════════════════════════════════════════════════════════════════
+       SVG CHART 2 — Running Perplexity
+       Line chart: X = token count so far, Y = PPL(w₁…wᵢ)
+       Shows how perplexity evolves as the sentence builds up.
+    ════════════════════════════════════════════════════════════════════ */
+    function renderRunningPPLSVG(rows) {
+      const N = rows.length;
+      const W = Math.max(700, N * 72);
+      const SH = 150;
+      const pL = 58, pR = 50, pT = 22, pB = 36;
+      const cW = W - pL - pR;
+      const cH = SH - pT - pB;
+
+      // Build running PPL at each position i
+      let cumNLP = 0;
+      const ppls = rows.map((r, i) => {
+        cumNLP += r.nlp;
+        return Math.exp(cumNLP / (i + 1));
+      });
+      const maxPPL = Math.max(...ppls, 2);
+      const slot = N > 1 ? cW / (N - 1) : cW;
+
+      const pts = ppls.map((p, i) => {
+        const x = (pL + i * slot).toFixed(1);
+        const y = (pT + (1 - p / maxPPL) * cH).toFixed(1);
+        return { x, y, p };
+      });
+
+      const polyline = pts.map(p => `${p.x},${p.y}`).join(' ');
+
+      let dots = '', dotLabels = '';
+      pts.forEach((p, i) => {
+        const r = i === N - 1 ? 5 : 3;
+        const fill = i === N - 1 ? '#4f46e5' : '#8b5cf6';
+        dots += `<circle cx="${p.x}" cy="${p.y}" r="${r}" fill="${fill}" stroke="#fff" stroke-width="1.5"/>`;
+        if (i === N - 1 || N <= 5) {
+          dotLabels += `<text x="${parseFloat(p.x) + 7}" y="${parseFloat(p.y) + 4}"
+        font-size="9.5" fill="#4f46e5" font-weight="700">${fmtPPL(p.p)}</text>`;
+        }
+      });
+
+      // Y-axis ticks
+      let yTicks = '';
+      const step = Math.max(1, Math.round(maxPPL / 4));
+      for (let v = 0; v <= maxPPL; v += step) {
+        const ty = (pT + (1 - v / maxPPL) * cH).toFixed(1);
+        yTicks += `<line x1="${pL - 4}" y1="${ty}" x2="${pL}" y2="${ty}" stroke="#94a3b8" stroke-width="1"/>
+      <text x="${pL - 6}" y="${parseFloat(ty) + 4}" text-anchor="end" font-size="9" fill="#94a3b8">${v.toFixed(0)}</text>`;
+      }
+
+      // X-axis labels
+      let xLabels = '';
+      pts.forEach((p, i) => {
+        xLabels += `<text x="${p.x}" y="${pT + cH + 14}" text-anchor="middle" font-size="9.5" fill="#94a3b8">${i + 1}</text>`;
+      });
+
+      return `<svg viewBox="0 0 ${W} ${SH}" xmlns="http://www.w3.org/2000/svg"
+    style="width:100%;min-width:${W}px;display:block">
+    <line x1="${pL}" y1="${pT}" x2="${pL}" y2="${pT + cH}" stroke="#e2e8f0" stroke-width="1"/>
+    <line x1="${pL}" y1="${pT + cH}" x2="${pL + cW}" y2="${pT + cH}" stroke="#e2e8f0" stroke-width="1"/>
+    <text transform="rotate(-90,14,${pT + cH / 2})" x="14" y="${pT + cH / 2 + 4}"
+      text-anchor="middle" font-size="10" fill="#94a3b8">PPL</text>
+    ${yTicks}
+    ${xLabels}
+    <polyline points="${polyline}" fill="none" stroke="#8b5cf6" stroke-width="2.2" stroke-linejoin="round"/>
+    ${dots}
+    ${dotLabels}
+    <text x="${pL}" y="13" font-size="11" fill="#64748b" font-weight="600">Running Perplexity — how PPL evolves as tokens accumulate</text>
+  </svg>`;
+    }
+
+    /* ════════════════════════════════════════════════════════════════════
+       renderBlock — MASTER RENDERER for Sections 2 and 4
+       items: Array<{ label, prob, entropy?, rank? }>
+       idPrefix: string (for unique table row IDs)
+    ════════════════════════════════════════════════════════════════════ */
+    function renderBlock(items, idPrefix) {
+      if (!items.length)
+        return { html: '<p class="empty-note">Add at least one token.</p>', ppl: null };
+
+      const bad = items.some(it => !Number.isFinite(it.prob) || it.prob <= 0 || it.prob > 1);
+      if (bad)
+        return { html: '<p class="status error">Every probability must be &gt; 0 and ≤ 1.</p>', ppl: null };
+
+      /* ── Compute per-token values ── */
+      const rows = items.map((it, i) => ({
+        idx: i + 1,
+        label: it.label,
+        prob: it.prob,
+        invP: 1 / it.prob,          // 1/P — Form 1
+        nlp: -Math.log(it.prob),   // −ln P — Form 2
+        bits: -Math.log2(it.prob),  // −log₂P
+        entropy: it.entropy ?? null,   // model's distribution entropy at this step
+        rank: it.rank ?? null,   // actual token's rank
+      }));
+
+      const N = rows.length;
+
+      /* Form 2 (log-space — always exact) */
+      const sumNLP = rows.reduce((s, r) => s + r.nlp, 0);
+      const meanNLP = sumNLP / N;         // cross-entropy ℒ in nats
+      const ppl = Math.exp(meanNLP);  // perplexity
+      const pplBits = meanNLP / Math.LN2; // ℒ in bits = log₂(PPL)
+
+      /* Form 1 (product — may overflow for large N) */
+      let productInvP = 1;
+      let overflow = false;
+      for (const r of rows) {
+        productInvP *= r.invP;
+        if (!Number.isFinite(productInvP)) { overflow = true; break; }
+      }
+
+      /* Total bits (information-theoretic) */
+      const totalBits = rows.reduce((s, r) => s + r.bits, 0);
+      const charCount = rows.reduce((s, r) => s + r.label.replace(/[␣↵⇥]/g, ' ').length, 0);
+      const asciiBytes = charCount;   // ≈ ASCII bytes
+      const bpc = charCount > 0 ? totalBits / charCount : 0;
+
+      const hasExtra = rows.some(r => r.entropy !== null);
+
+      /* ── Token strip ── */
+      let strip = '<div class="token-strip">';
+      rows.forEach((r, i) => {
+        const rankNote = r.rank !== null ? `  rank #${r.rank.toLocaleString()}` : '';
+        strip += `
+      <div class="token-chip ${probClass(r.prob)}"
+           data-row="${idPrefix}-row-${i}"
+           title="P=${fmtP(r.prob)}  1/P=${fmtInvP(r.invP)}  −lnP=${fmtNLP(r.nlp)}${rankNote}">
+        <span class="tc-label">${esc(r.label)}</span>
+        <span class="tc-prob">${(r.prob * 100).toFixed(1)}%</span>
+        <span class="tc-nlp">surprise ${fmtNLP(r.nlp)}</span>
+        ${r.rank !== null ? `<span class="tc-rank">rank #${r.rank <= 999 ? r.rank : r.rank.toLocaleString()}</span>` : ''}
+      </div>`;
+      });
+      strip += '</div>';
+
+      /* ── SVG charts (only when model ran — hasExtra check or always for Section 4) ── */
+      const surprisalChart = `
+    <div class="chart-title">Surprisal Timeline (−ln P per token)</div>
+    <div class="chart-wrap">${renderSurprisalSVG(rows)}</div>`;
+
+      const runningChart = N > 1 ? `
+    <div class="chart-title" style="margin-top:14px">Running Perplexity</div>
+    <div class="chart-wrap">${renderRunningPPLSVG(rows)}</div>` : '';
+
+      /* ── Table — includes entropy and rank columns if available ── */
+      const extraTh = hasExtra
+        ? `<th>Model entropy H</th><th>Token rank</th>` : '';
+      let tbody = '';
+      rows.forEach((r, i) => {
+        const entropyTd = r.entropy !== null
+          ? `<td class="ce">${r.entropy.toFixed(3)} nats</td>
+         <td class="cr">${fmtRank(r.rank)}</td>`
+          : '';
+        tbody += `
+      <tr id="${idPrefix}-row-${i}">
+        <td>${r.idx}</td>
+        <td><span class="token-pill">${esc(r.label)}</span></td>
+        <td class="ci">${fmtP(r.prob)}</td>
+        <td class="ci">${fmtInvP(r.invP)}</td>
+        <td class="ca">${fmtNLP(r.nlp)}</td>
+        <td class="cb">${r.bits.toFixed(4)}</td>
+        ${entropyTd}
+      </tr>`;
+      });
+
+      /* ── Form 1 derivation strings ── */
+      const invPList = rows.map(r => fmtInvP(r.invP)).join(" × ");
+      const prodStr = overflow
+        ? `<em style="color:var(--muted)">numeric overflow (use Form 2)</em>`
+        : `<span class="hl-invp">${Number(productInvP.toPrecision(6))}</span>`;
+
+      /* ── Form 2 derivation strings ── */
+      const nlpList = rows.map(r => fmtNLP(r.nlp)).join(" + ");
+
+      const html = `
+    <!-- 1. Big Answer First -->
+    <div class="ppl-box" style="margin-top:0;margin-bottom:14px">
+      <div class="ppl-left">
+        <div class="ppl-formula">PPL = exp(ℒ) = exp(${fmtNLP(meanNLP)})</div>
+        <div class="ppl-meaning">${describePPL(ppl)}</div>
+        <div class="ppl-nll">ℒ = ${fmtNLP(meanNLP)} nats &nbsp;·&nbsp; ${pplBits.toFixed(4)} bits/token &nbsp;·&nbsp; ${N} token${N > 1 ? 's' : ''}</div>
+      </div>
+      <div class="ppl-value">${fmtPPL(ppl)}</div>
+    </div>
+
+    <!-- 2. Token Strip -->
+    ${strip}
+    <div class="strip-legend">
+      <span><i class="leg-dot" style="background:#059669"></i> Expected (≥30%)</span>
+      <span><i class="leg-dot" style="background:#d97706"></i> Moderate (5–30%)</span>
+      <span><i class="leg-dot" style="background:#dc2626"></i> Surprising (&lt;5%)</span>
+    </div>
+
+    <!-- 3. Sub-tabs so beginners aren't overwhelmed -->
+    <div class="subtabs" role="tablist">
+      <button type="button" class="subtab-btn active" data-subtab="${idPrefix}-math">📐 Step-by-Step Math &amp; Table</button>
+      <button type="button" class="subtab-btn" data-subtab="${idPrefix}-charts">📊 Visual Charts</button>
+      <button type="button" class="subtab-btn" data-subtab="${idPrefix}-deep">🔬 Deep Dive &amp; Bits</button>
+    </div>
+
+    <!-- Sub-tab 1: Step-by-Step Math & Table -->
+    <div class="subtab-pane active" id="${idPrefix}-math">
+      <div class="deriv-grid" style="margin-top:4px">
+        <!-- Form 1: geometric mean of inverses -->
+        <div class="dbox">
+          <div class="dbox-title">Form 1 — Geometric Mean of Inverses</div>
+          <div class="sp-step">
+            <span class="sp-label">① Collect 1/P for each token</span>
+            <code class="sp-code"><span class="hl-invp">${invPList}</span></code>
+          </div>
+          <div class="sp-step">
+            <span class="sp-label">② Multiply all → ∏ (1/P)</span>
+            <code class="sp-code">Product = ${prodStr}</code>
+          </div>
+          <div class="sp-step">
+            <span class="sp-label">③ N-th root (geometric mean)</span>
+            <code class="sp-code">PPL = (product)<sup>1/${N}</sup> = <span class="hl-ppl">${fmtPPL(ppl)}</span></code>
+          </div>
+        </div>
+
+        <!-- Form 2: exponentiated cross-entropy (how we compute) -->
+        <div class="dbox">
+          <div class="dbox-title">Form 2 — Exponentiated Cross-Entropy ℒ</div>
+          <div class="sp-step">
+            <span class="sp-label">① Collect −ln P for each token</span>
+            <code class="sp-code"><span class="hl-nlp">${nlpList}</span></code>
+          </div>
+          <div class="sp-step">
+            <span class="sp-label">② Sum ÷ N → cross-entropy ℒ</span>
+            <code class="sp-code">ℒ = ${fmtNLP(sumNLP)} / ${N} = <span class="hl-mean">${fmtNLP(meanNLP)}</span> nats</code>
+          </div>
+          <div class="sp-step">
+            <span class="sp-label">③ Exponentiate → PPL = e<sup>ℒ</sup></span>
+            <code class="sp-code">PPL = exp(${fmtNLP(meanNLP)}) = <span class="hl-ppl">${fmtPPL(ppl)}</span></code>
+          </div>
+        </div>
+      </div>
+
+      <div class="table-wrap" style="margin-top:14px">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th><th>Token</th>
+              <th>P (probability)</th>
+              <th>1/P (inverse)</th>
+              <th>−ln P (surprise, nats)</th>
+              <th>−log₂P (bits)</th>
+              ${extraTh}
+            </tr>
+          </thead>
+          <tbody>${tbody}</tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Sub-tab 2: Visual Charts -->
+    <div class="subtab-pane" id="${idPrefix}-charts">
+      ${surprisalChart}
+      ${runningChart}
+    </div>
+
+    <!-- Sub-tab 3: Deep Dive & Information Theory -->
+    <div class="subtab-pane" id="${idPrefix}-deep">
+      <div class="metrics-grid" style="margin-top:4px">
+        <div class="metric-box">
+          <div class="metric-label">Perplexity</div>
+          <div class="metric-value">${fmtPPL(ppl)}</div>
+          <div class="metric-sub">exp(ℒ) ← branching factor</div>
+        </div>
+        <div class="metric-box">
+          <div class="metric-label">Cross-entropy (nats)</div>
+          <div class="metric-value">${fmtNLP(meanNLP)}</div>
+          <div class="metric-sub">mean −ln P = ln(PPL)</div>
+        </div>
+        <div class="metric-box">
+          <div class="metric-label">Cross-entropy (bits)</div>
+          <div class="metric-value">${pplBits.toFixed(4)}</div>
+          <div class="metric-sub">mean −log₂P = log₂(PPL)</div>
+        </div>
+        <div class="metric-box">
+          <div class="metric-label">Tokens N</div>
+          <div class="metric-value">${N}</div>
+          <div class="metric-sub">denominator of mean</div>
+        </div>
+      </div>
+
+      <div class="info-panel">
+        <h4>📐 Information-Theoretic View</h4>
+        <div class="info-row">
+          <div class="info-item">
+            <div class="il">Sentence bits (model)</div>
+            <div class="iv">${totalBits.toFixed(2)}</div>
+            <div class="is">Σ −log₂P — encoding cost</div>
+          </div>
+          <div class="info-item">
+            <div class="il">Bits per character</div>
+            <div class="iv">${bpc.toFixed(3)}</div>
+            <div class="is">BPC — compression quality</div>
+          </div>
+          <div class="info-item">
+            <div class="il">ASCII cost</div>
+            <div class="iv">~${(asciiBytes * 8).toFixed(0)}</div>
+            <div class="is">8 bits/char — naive encoding</div>
+          </div>
+          <div class="info-item">
+            <div class="il">Compression ratio</div>
+            <div class="iv">${(asciiBytes > 0 ? (asciiBytes * 8 / totalBits) : 0).toFixed(2)}×</div>
+            <div class="is">ASCII bits ÷ model bits</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="equiv-note">
+        <strong>Why Form 1 = Form 2:</strong>
+        (∏ᵢ 1/Pᵢ)<sup>1/N</sup>
+        = exp((1/N)·Σᵢ ln(1/Pᵢ))
+        = exp((1/N)·Σᵢ −lnPᵢ)
+        = exp(ℒ)
+        = <strong>${fmtPPL(ppl)}</strong> ✓
+      </div>
+    </div>
+  `;
+
+      return { html, ppl };
+    }
+
+    /* ── Hover-link + Sub-tab switcher (remembers active tab per section) ── */
+    const activeSubTab = { model: "model-math", manual: "manual-math" };
+
+    function attachHover(container, idPrefix) {
+      container.querySelectorAll("[data-row]").forEach(chip => {
+        const target = document.getElementById(chip.dataset.row);
+        if (!target) return;
+        chip.addEventListener("mouseenter", () => target.classList.add("hl"));
+        chip.addEventListener("mouseleave", () => target.classList.remove("hl"));
+      });
+
+      // Restore remembered sub-tab and wire click handlers
+      const btns = container.querySelectorAll(".subtab-btn");
+      const panes = container.querySelectorAll(".subtab-pane");
+      if (btns.length) {
+        const applyTab = (tabId) => {
+          activeSubTab[idPrefix] = tabId;
+          btns.forEach(b => b.classList.toggle("active", b.dataset.subtab === tabId));
+          panes.forEach(p => p.classList.toggle("active", p.id === tabId));
+        };
+        if (activeSubTab[idPrefix]) applyTab(activeSubTab[idPrefix]);
+        btns.forEach(b => b.addEventListener("click", () => applyTab(b.dataset.subtab)));
+      }
+    }
+
+    /* ── History ────────────────────────────────────────────────────────── */
+    function recordHistory(sentence, ppl) {
+      const idx = recentRuns.findIndex(r => r.sentence === sentence);
+      if (idx !== -1) recentRuns.splice(idx, 1);
+      recentRuns.unshift({ sentence, ppl });
+      if (recentRuns.length > 7) recentRuns.pop();
+      historyChips.innerHTML = "";
+      recentRuns.forEach(run => {
+        const btn = document.createElement("button");
+        btn.type = "button"; btn.className = "history-chip";
+        btn.innerHTML = `<span>${esc(run.sentence)}</span> <strong>PPL ${fmtPPL(run.ppl)}</strong>`;
+        btn.onclick = () => { sentenceInput.value = run.sentence; runModel(); };
+        historyChips.appendChild(btn);
+      });
+      historyWrap.classList.toggle("visible", recentRuns.length > 0);
+    }
+
+    /* ════════════════════════════════════════════════════════════════════
+       NEXT-TOKEN RENDERER — used by inference AND temperature slider
+       probs: Float64Array of probabilities over full vocab
+       T:     temperature (1 = no change, used for label only)
+    ════════════════════════════════════════════════════════════════════ */
+    function renderNextToken(probs, T) {
+      const top8 = topK(probs, 8);
+      const top8Sum = top8.reduce((s, e) => s + e.prob, 0);
+      const H = entropy(probs); // distribution entropy
+      const effVocab = Math.exp(H);   // effective vocabulary size
+      const maxP = top8[0]?.prob || 1;
+      lastNext3D = {
+        items: top8.map(e => ({ label: visToken(tokenizer.decode([e.id])), prob: e.prob })),
+        T
+      };
+      if (currentStep === 3) sync3DForStep();
+
+      top8Badge.textContent = `Top 8 cover ${(top8Sum * 100).toFixed(1)}%  ·  T=${T.toFixed(2)}`;
+      top8Badge.style.display = "inline-block";
+
+      let barsHtml = `<p class="hint-text">Click a token to append it and re-run. Temperature T rescales confidence.</p>
+  <div class="bars">`;
+      top8.forEach((e, rank) => {
+        const raw = tokenizer.decode([e.id]);
+        const label = visToken(raw);
+        const pct = (e.prob * 100).toFixed(2);
+        const w = Math.max(2, (e.prob / maxP) * 100).toFixed(1);
+        const cls = rank === 0 ? " top-pick" : "";
+        barsHtml += `
+      <div class="bar-row${cls}" data-append="${esc(raw)}">
+        <div><span class="token-pill">${esc(label)}</span></div>
+        <div class="bar-track"><div class="bar-fill" style="width:${w}%"></div></div>
+        <div class="bar-pct">${pct}%</div>
+      </div>`;
+      });
+      barsHtml += `</div>`;
+
+      // Top-P cumulative bar
+      let topp = `<div class="topp-row"><div class="topp-label" style="font-size:.8rem;color:var(--muted)">Prob. mass:</div>
+    <div class="topp-track">`;
+      const palette = ['#4f46e5', '#7c3aed', '#a855f7', '#c084fc', '#8b5cf6', '#6366f1', '#818cf8', '#a5b4fc'];
+      top8.forEach((e, i) => {
+        const w = (e.prob * 100).toFixed(2);
+        topp += `<div class="topp-seg" style="width:${w}%;background:${palette[i]}" title="${visToken(tokenizer.decode([e.id]))}: ${(e.prob * 100).toFixed(1)}%"></div>`;
+      });
+      topp += `<div class="topp-seg" style="flex:1;background:#e2e8f0" title="Remaining ${((1 - top8Sum) * 100).toFixed(1)}%"></div>
+    </div></div>`;
+
+      // Entropy gauge
+      const entPct = Math.min(100, (H / MAX_ENTROPY_NATS) * 100).toFixed(1);
+      const entBits = H / Math.LN2;
+      const entGauge = `
+    <div class="ent-gauge-wrap">
+      <div class="ent-gauge-label">Distribution entropy H — model uncertainty at this position</div>
+      <div class="ent-gauge-track"><div class="ent-gauge-fill" style="width:${entPct}%"></div></div>
+      <div class="ent-stats">
+        <span class="ent-stat">H = <strong>${H.toFixed(3)} nats</strong></span>
+        <span class="ent-stat">H = <strong>${entBits.toFixed(3)} bits</strong></span>
+        <span class="ent-stat">Effective vocab = <strong>exp(H) = ${effVocab.toFixed(1)} tokens</strong></span>
+        <span class="ent-stat">Max entropy (uniform) = <strong>${MAX_ENTROPY_NATS.toFixed(2)} nats</strong></span>
+      </div>
+    </div>`;
+
+      // Temperature control (live slider)
+      const tempControl = `
+    <div class="temp-control">
+      <div class="temp-header">
+        <span class="temp-label">🌡️ Temperature T</span>
+        <span class="temp-val" id="temp-display">${T.toFixed(2)}</span>
+      </div>
+      <input type="range" id="temp-slider" min="0.1" max="3.0" step="0.05" value="${T}"/>
+      <div class="temp-desc">
+        T &lt; 1 → peaks more sharply (confident, lower PPL of distribution) &nbsp;·&nbsp;
+        T = 1 → original distribution &nbsp;·&nbsp;
+        T &gt; 1 → flatter / more uniform (uncertain, higher PPL of distribution)
+      </div>
+    </div>`;
+
+      nextTokenResEl.innerHTML = barsHtml + topp + entGauge + tempControl;
+
+      // Click-to-append on bars
+      nextTokenResEl.querySelectorAll("[data-append]").forEach(row => {
+        row.onclick = () => { sentenceInput.value += row.dataset.append; runModel(); };
+      });
+
+      // Live temperature slider
+      const slider = document.getElementById("temp-slider");
+      const display = document.getElementById("temp-display");
+      if (slider && lastRawLogits) {
+        slider.oninput = () => {
+          const newT = parseFloat(slider.value);
+          display.textContent = newT.toFixed(2);
+          const newProbs = softmaxT(lastRawLogits, newT);
+          renderNextToken(newProbs, newT);
+        };
+      }
+    }
+
+    /* ════════════════════════════════════════════════════════════════════
+       MODEL LOADING
+    ════════════════════════════════════════════════════════════════════ */
+    function setStatus(text, cls = "") {
+      statusEl.textContent = text;
+      statusEl.className = "status" + (cls ? " " + cls : "");
+    }
+
+    async function ensureModel() {
+      if (model && tokenizer) return;
+      if (isLoading) return;
+      isLoading = true; calcBtn.disabled = true;
+      setStatus("Downloading the model (Xenova/distilgpt2, q8)…");
+      progressWrap.classList.add("visible"); progressBar.style.width = "5%";
+      try {
+        tokenizer = await AutoTokenizer.from_pretrained("Xenova/distilgpt2");
+        model = await AutoModelForCausalLM.from_pretrained("Xenova/distilgpt2", {
+          dtype: "q8",
+          progress_callback(info) {
+            if (typeof info?.progress === "number") {
+              const pct = Math.min(99, Math.max(5, Math.round(info.progress)));
+              progressBar.style.width = pct + "%";
+              setStatus(`Downloading… (${pct}%)`);
+            }
+          },
+        });
+        progressBar.style.width = "100%";
+        setStatus("Model ready", "ready");
+      } catch (err) {
+        tokenizer = model = null;
+        setStatus("Failed to load model: " + (err.message || err), "error");
+        throw err;
+      } finally {
+        isLoading = false; calcBtn.disabled = false;
+        setTimeout(() => progressWrap.classList.remove("visible"), 500);
+      }
+    }
+
+    /* ════════════════════════════════════════════════════════════════════
+       MAIN INFERENCE
+       ─────────────────────────────────────────────────────────────────
+       AUTOREGRESSIVE PROBABILITY EXTRACTION:
+       ids = [BOS=50256, w₁, w₂, …, wₙ]           (length = N+1)
+       logits shape: [1, N+1, vocab_size]
+       logits[0, i, :] → distribution predicting position i+1
+    
+       So P(wᵢ | w<ᵢ) = softmax(logits[0, i-1, :])[wᵢ]
+    
+       Per-position extras (new in this version):
+         entropy(i) = −Σ p log p over full vocab at position i-1
+         rank(i)    = how many tokens had higher probability than wᵢ
+       These tell us: "Was the model uncertain here?" and
+                      "Was the actual token the model's top guess?"
+    ════════════════════════════════════════════════════════════════════ */
+    async function runModel() {
+      const sentence = sentenceInput.value.trim();
+      if (!sentence) { setStatus("Please enter a sentence first.", "error"); return; }
+      try { await ensureModel(); } catch { return; }
+
+      calcBtn.disabled = true; setStatus("Running model…");
+      try {
+        const t0 = performance.now();
+
+        /* ① Tokenise + prepend BOS (50256 = GPT-2's start-of-sequence marker) */
+        const encoded = Array.from(tokenizer.encode(sentence));
+        if (!encoded.length) {
+          modelResultsEl.innerHTML = '<p class="empty-note">No tokens found.</p>';
+          nextTokenResEl.innerHTML = '<p class="empty-note">No predictions.</p>';
+          setStatus("Model ready", "ready"); return;
+        }
+        const ids = [50256, ...encoded];
+        const seqLen = ids.length;
+
+        /* ② Build int64 tensors — shape [1, seqLen] */
+        const inputIds = new Tensor("int64", BigInt64Array.from(ids.map(BigInt)), [1, seqLen]);
+        const attnMask = new Tensor("int64", BigInt64Array.from(ids.map(() => 1n)), [1, seqLen]);
+
+        /* ③ Single forward pass → logits [1, seqLen, vocab] */
+        const output = await model({ input_ids: inputIds, attention_mask: attnMask });
+        const logits = output.logits;
+        const vocabSize = logits.dims[2];
+        const logData = logits.data;
+        lastVocabSize = vocabSize;
+
+        /* ④ Extract P(wᵢ|w<ᵢ) + entropy + rank for each real token */
+        const tokenItems = [];
+        for (let i = 1; i < seqLen; i++) {
+          const off = (i - 1) * vocabSize;
+          const slice = logData.subarray(off, off + vocabSize);
+          const probs = softmax(slice);           // P over full vocab at this step
+          const tid = ids[i];
+
+          tokenItems.push({
+            label: visToken(tokenizer.decode([tid])),
+            prob: probs[tid],                   // P(wᵢ | w<ᵢ) — the core quantity
+            entropy: entropy(probs),               // how uncertain was the model overall?
+            rank: tokenRank(probs, tid),        // was this the top prediction?
+          });
+        }
+
+        /* ⑤ Render Section 2 with charts, table, both formula forms, metrics */
+        const rendered = renderBlock(tokenItems, "model");
+        modelResultsEl.innerHTML = rendered.html;
+        modelResultsEl.classList.add("fade-in");
+        attachHover(modelResultsEl, "model");
+        if (rendered.ppl !== null) recordHistory(sentence, rendered.ppl);
+        lastModel3D = { items: tokenItems, ppl: rendered.ppl };
+
+        /* ⑥ Store last-position logits for the temperature slider */
+        const lastOff = (seqLen - 1) * vocabSize;
+        lastRawLogits = logData.slice(lastOff, lastOff + vocabSize); // copy
+        const nextProbs = softmax(lastRawLogits);
+
+        /* ⑦ Render Section 3 at T=1 (temperature slider is wired inside) */
+        renderNextToken(nextProbs, 1.0);
+        nextTokenResEl.classList.add("fade-in");
+
+        const ms = Math.round(performance.now() - t0);
+        timingBadge.textContent = `${encoded.length} token${encoded.length > 1 ? "s" : ""} · ${ms} ms`;
+        timingBadge.style.display = "inline-block";
+        setStatus("Model ready", "ready");
+
+        /* ⑧ Update step indicators, context banners, and guide user to Step 2 */
+        document.querySelectorAll('.step-tab[data-step="2"], .step-tab[data-step="3"]')
+          .forEach(t => t.classList.add("has-data"));
+        document.getElementById("ctx-sent-2").textContent = `"${sentence}" (PPL ${fmtPPL(rendered.ppl)})`;
+        document.getElementById("ctx-sent-3").textContent = `"${sentence}"`;
+        document.getElementById("ctx-banner-2").classList.add("visible");
+        document.getElementById("ctx-banner-3").classList.add("visible");
+        if (isStepMode && currentStep === 1) goToStep(2);
+
+      } catch (err) {
+        setStatus("Error: " + (err.message || err), "error");
+      } finally {
+        calcBtn.disabled = false;
+      }
+    }
+
+    /* ── Section 1 events ───────────────────────────────────────────────── */
+    calcBtn.addEventListener("click", runModel);
+    sentenceInput.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); runModel(); } });
+    document.querySelectorAll("[data-sample]").forEach(btn => {
+      btn.onclick = () => { sentenceInput.value = btn.dataset.sample; runModel(); };
+    });
+
+    /* ════════════════════════════════════════════════════════════════════
+       SECTION 4 — Manual sandbox
+       Same renderBlock() — shows both formula forms + charts + metrics.
+       VERIFIED PRESETS:
+         "I love Python"  (0.5, 0.8, 0.2)       → PPL 2.32
+         "All 1/8"        (8 × 0.125)             → PPL 8.00
+         "One surprising" (0.9, 0.9, 0.9, 0.01) → PPL 3.42
+         "Uniform 1/5"    (5 × 0.2)               → PPL 5.00
+         "Near-certain"   (0.95, 0.9, 0.98)      → PPL ~1.07
+    ════════════════════════════════════════════════════════════════════ */
+    const manualRowsEl = document.getElementById("manual-rows");
+    const manualResEl = document.getElementById("manual-results");
+    const addTokenBtn = document.getElementById("add-token-btn");
+
+    let manualTokens = [
+      { name: "I", prob: 0.5 },
+      { name: "␣love", prob: 0.8 },
+      { name: "␣Python", prob: 0.2 },
+    ];
+
+    function refreshManual() {
+      const items = manualTokens.map((t, i) => ({
+        label: t.name.trim() || `token${i + 1}`,
+        prob: Number(t.prob),
+      }));
+      const { html, ppl } = renderBlock(items, "manual");
+      manualResEl.innerHTML = html;
+      attachHover(manualResEl, "manual");
+      lastManual3D = ppl !== null ? { items, ppl } : null;
+      if (currentStep === 4 && lastManual3D) sync3DForStep();
+    }
+
+    function buildManualRows() {
+      manualRowsEl.innerHTML = "";
+      manualTokens.forEach((tok, idx) => {
+        const row = document.createElement("div");
+        row.className = "manual-row";
+
+        const nameIn = document.createElement("input");
+        nameIn.type = "text"; nameIn.placeholder = "Token name"; nameIn.value = tok.name;
+        nameIn.oninput = e => { manualTokens[idx].name = e.target.value; refreshManual(); };
+
+        const probIn = document.createElement("input");
+        probIn.type = "number"; probIn.step = "any"; probIn.min = "0.0001"; probIn.max = "1";
+        probIn.placeholder = "Probability"; probIn.value = tok.prob;
+
+        const slider = document.createElement("input");
+        slider.type = "range"; slider.min = "0.01"; slider.max = "1"; slider.step = "0.01";
+        slider.value = Math.min(1, Math.max(0.01, Number(tok.prob) || 0.5));
+
+        probIn.oninput = e => {
+          manualTokens[idx].prob = e.target.value;
+          const v = Number(e.target.value);
+          if (Number.isFinite(v) && v >= 0.01 && v <= 1) slider.value = v;
+          refreshManual();
+        };
+        slider.oninput = e => {
+          manualTokens[idx].prob = Number(e.target.value);
+          probIn.value = e.target.value;
+          refreshManual();
+        };
+
+        const rm = document.createElement("button");
+        rm.type = "button"; rm.className = "btn-remove"; rm.textContent = "Remove";
+        rm.onclick = () => { manualTokens.splice(idx, 1); buildManualRows(); refreshManual(); };
+
+        row.append(nameIn, probIn, slider, rm);
+        manualRowsEl.appendChild(row);
+      });
+      refreshManual();
+    }
+
+    addTokenBtn.onclick = () => {
+      manualTokens.push({ name: `token${manualTokens.length + 1}`, prob: 0.5 });
+      buildManualRows();
+    };
+
+    /* Presets */
+    document.getElementById("preset-love").onclick = () => {
+      manualTokens = [{ name: "I", prob: 0.5 }, { name: "␣love", prob: 0.8 }, { name: "␣Python", prob: 0.2 }];
+      buildManualRows();
+    };
+    document.getElementById("preset-eighth").onclick = () => {
+      manualTokens = Array.from({ length: 8 }, (_, i) => ({ name: `word${i + 1}`, prob: 0.125 }));
+      buildManualRows();
+    };
+    document.getElementById("preset-surprise").onclick = () => {
+      manualTokens = [{ name: "The", prob: 0.9 }, { name: "␣cat", prob: 0.9 }, { name: "␣sat", prob: 0.9 }, { name: "␣quantum", prob: 0.01 }];
+      buildManualRows();
+    };
+    document.getElementById("preset-uniform5").onclick = () => {
+      manualTokens = Array.from({ length: 5 }, (_, i) => ({ name: `word${i + 1}`, prob: 0.2 }));
+      buildManualRows();
+    };
+    document.getElementById("preset-certain").onclick = () => {
+      manualTokens = [{ name: "The", prob: 0.95 }, { name: "␣cat", prob: 0.90 }, { name: "␣sat", prob: 0.98 }];
+      buildManualRows();
+    };
+
+    buildManualRows(); // initial render on page load
+
+    /* ════════════════════════════════════════════════════════════════════
+       STEP-BY-STEP NAVIGATION
+       Lets beginners focus on one section at a time, or toggle All Sections.
+    ════════════════════════════════════════════════════════════════════ */
+    const mainContainer = document.getElementById("main-container");
+    const viewToggleBtn = document.getElementById("view-toggle-btn");
+    const stepTabs = document.querySelectorAll(".step-tab");
+    let isStepMode = true;
+    let currentStep = 1;
+    let lastModel3D = null;
+    let lastManual3D = null;
+    let lastNext3D = null;
+
+    function goToStep(stepNum) {
+      currentStep = Number(stepNum);
+      stepTabs.forEach(t => t.classList.toggle("active", Number(t.dataset.step) === currentStep));
+      for (let i = 1; i <= 5; i++) {
+        const sec = document.getElementById(`section-${i}`);
+        if (sec) sec.classList.toggle("step-active", i === currentStep);
+      }
+      sync3DForStep();
+      if (!isStepMode) {
+        const target = document.getElementById(`section-${currentStep}`);
+        if (target) target.scrollIntoView({ behavior: "smooth", block: "start" });
+      } else {
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      }
+    }
+
+    stepTabs.forEach(tab => {
+      tab.addEventListener("click", () => goToStep(tab.dataset.step));
+    });
+
+    document.querySelectorAll("[data-goto]").forEach(btn => {
+      btn.addEventListener("click", () => goToStep(btn.dataset.goto));
+    });
+
+    viewToggleBtn.addEventListener("click", () => {
+      isStepMode = !isStepMode;
+      mainContainer.classList.toggle("step-mode", isStepMode);
+      viewToggleBtn.textContent = isStepMode ? "Show All Sections" : "Step-by-Step View";
+      if (isStepMode) goToStep(currentStep);
+    });
+
+    /* ════════════════════════════════════════════════════════════════════
+       INTERACTIVE 3D WEBGL ENGINE (Three.js)
+       Renders real 3D geometry with studio lighting, soft shadows,
+       orbit drag + zoom, raycast hover tooltips, and live transitions.
+    ════════════════════════════════════════════════════════════════════ */
+    const stageCard = document.getElementById("stage-3d-card");
+    const stageView = document.getElementById("stage-viewport");
+    const stageModeEl = document.getElementById("stage-3d-mode");
+    const stageHudEl = document.getElementById("stage-hud");
+    const stageTipEl = document.getElementById("stage-tooltip");
+    const btn3dMetric = document.getElementById("btn-3d-metric");
+    const btn3dOrbit = document.getElementById("btn-3d-orbit");
+    const btn3dReset = document.getElementById("btn-3d-reset");
+    const btn3dHide = document.getElementById("btn-3d-collapse");
+
+    let threeAPI = null;
+    let metricMode = "surprisal"; // "surprisal" | "prob"
+    let autoOrbit = true;
+
+    function sync3DForStep() {
+      if (!threeAPI) return;
+      if (currentStep === 2 && lastModel3D) {
+        threeAPI.showTokens(lastModel3D.items, lastModel3D.ppl, "Model Tokens");
+      } else if (currentStep === 3 && lastNext3D) {
+        threeAPI.showNextTokens(lastNext3D.items, lastNext3D.T);
+      } else if (currentStep === 4 && lastManual3D) {
+        threeAPI.showTokens(lastManual3D.items, lastManual3D.ppl, "Manual Sandbox");
+      } else if (lastModel3D && currentStep !== 1) {
+        threeAPI.showTokens(lastModel3D.items, lastModel3D.ppl, "Model Tokens");
+      } else {
+        threeAPI.showIdle();
+      }
+    }
+
+    btn3dMetric.addEventListener("click", () => {
+      metricMode = metricMode === "surprisal" ? "prob" : "surprisal";
+      btn3dMetric.textContent = metricMode === "surprisal" ? "Height: Surprisal" : "Height: Probability";
+      sync3DForStep();
+    });
+    btn3dOrbit.addEventListener("click", () => {
+      autoOrbit = !autoOrbit;
+      btn3dOrbit.classList.toggle("active", autoOrbit);
+    });
+    btn3dHide.addEventListener("click", () => {
+      const collapsed = stageCard.classList.toggle("collapsed");
+      btn3dHide.textContent = collapsed ? "Show 3D" : "Hide 3D";
+      if (!collapsed && threeAPI) threeAPI.resize();
+    });
+
+    (async function init3DStage() {
+      try {
+        const THREE = await import("https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js");
+        const canvas = document.getElementById("three-canvas");
+        const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(42, 2, 0.1, 100);
+
+        // Orbit state
+        let theta = 0.55, phi = 1.08, radius = 9.5;
+        const target = new THREE.Vector3(0, 1.0, 0);
+        function updateCamera() {
+          const sp = Math.sin(phi), cp = Math.cos(phi);
+          camera.position.set(
+            target.x + radius * sp * Math.sin(theta),
+            target.y + radius * cp,
+            target.z + radius * sp * Math.cos(theta)
+          );
+          camera.lookAt(target);
+        }
+        btn3dReset.addEventListener("click", () => { theta = 0.55; phi = 1.08; radius = 9.5; updateCamera(); });
+
+        // Studio Lighting
+        scene.add(new THREE.HemisphereLight(0xffffff, 0xc7d2fe, 1.05));
+        const dirLight = new THREE.DirectionalLight(0xffffff, 1.45);
+        dirLight.position.set(6, 11, 7);
+        dirLight.castShadow = true;
+        dirLight.shadow.mapSize.set(1024, 1024);
+        dirLight.shadow.camera.near = 1;
+        dirLight.shadow.camera.far = 30;
+        const d = 8;
+        dirLight.shadow.camera.left = -d; dirLight.shadow.camera.right = d;
+        dirLight.shadow.camera.top = d; dirLight.shadow.camera.bottom = -d;
+        scene.add(dirLight);
+
+        const rimLight = new THREE.PointLight(0x7c3aed, 1.2, 20);
+        rimLight.position.set(-6, 5, -5);
+        scene.add(rimLight);
+
+        // Floor disc + subtle polar grid
+        const floorGeo = new THREE.CylinderGeometry(6.8, 7.0, 0.18, 64);
+        const floorMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.35, metalness: 0.05 });
+        const floor = new THREE.Mesh(floorGeo, floorMat);
+        floor.position.y = -0.1;
+        floor.receiveShadow = true;
+        scene.add(floor);
+
+        const polar = new THREE.PolarGridHelper(6.6, 12, 6, 64, 0xc7d2fe, 0xe2e8f0);
+        polar.position.y = 0.002;
+        scene.add(polar);
+
+        // Dynamic group for scene content
+        const contentGroup = new THREE.Group();
+        scene.add(contentGroup);
+
+        let interactiveMeshes = [];
+        let animUpdater = null;
+        let hoveredMesh = null;
+
+        function clearContent() {
+          while (contentGroup.children.length) {
+            const obj = contentGroup.children[0];
+            contentGroup.remove(obj);
+            if (obj.geometry) obj.geometry.dispose();
+            if (obj.material) {
+              if (Array.isArray(obj.material)) obj.material.forEach(m => m.dispose());
+              else obj.material.dispose();
+            }
+          }
+          interactiveMeshes = [];
+          hoveredMesh = null;
+          stageTipEl.style.display = "none";
+        }
+
+        function colorForProb(p) {
+          if (p >= 0.20) return 0x10b981;
+          if (p >= 0.03) return 0xf59e0b;
+          return 0xef4444;
+        }
+
+        function showIdle() {
+          clearContent();
+          stageModeEl.textContent = "Neural Core";
+          stageHudEl.textContent = "Drag to rotate · Run a sentence or open Step 4 to see 3D tokens";
+
+          const coreGeo = new THREE.IcosahedronGeometry(1.15, 1);
+          const coreMat = new THREE.MeshPhysicalMaterial({
+            color: 0x4f46e5, roughness: 0.18, metalness: 0.15, clearcoat: 0.9, clearcoatRoughness: 0.1
+          });
+          const core = new THREE.Mesh(coreGeo, coreMat);
+          core.position.y = 1.65;
+          core.castShadow = true;
+          contentGroup.add(core);
+
+          const wireGeo = new THREE.IcosahedronGeometry(1.48, 1);
+          const wireMat = new THREE.MeshBasicMaterial({ color: 0x818cf8, wireframe: true, transparent: true, opacity: 0.45 });
+          const wire = new THREE.Mesh(wireGeo, wireMat);
+          wire.position.y = 1.65;
+          contentGroup.add(wire);
+
+          const sats = [];
+          const satGeo = new THREE.SphereGeometry(0.16, 20, 20);
+          [0x2563eb, 0x7c3aed, 0x10b981, 0xf59e0b, 0xec4899, 0x06b6d4].forEach((c, idx) => {
+            const m = new THREE.Mesh(satGeo, new THREE.MeshStandardMaterial({ color: c, roughness: 0.25, metalness: 0.2 }));
+            m.castShadow = true;
+            contentGroup.add(m);
+            sats.push({ mesh: m, angle: (idx / 6) * Math.PI * 2, speed: 0.55 + idx * 0.07, r: 2.3 + (idx % 2) * 0.4 });
+          });
+
+          animUpdater = (t) => {
+            core.rotation.y = t * 0.45;
+            core.rotation.x = Math.sin(t * 0.3) * 0.2;
+            wire.rotation.y = -t * 0.28;
+            sats.forEach(s => {
+              const a = s.angle + t * s.speed;
+              s.mesh.position.set(Math.cos(a) * s.r, 1.65 + Math.sin(a * 2) * 0.45, Math.sin(a) * s.r);
+            });
+          };
+        }
+
+        function showTokens(items, ppl, modeLabel) {
+          clearContent();
+          stageModeEl.textContent = modeLabel;
+          stageHudEl.textContent = metricMode === "surprisal"
+            ? `3D Surprisal (−ln P) · Translucent plane = Mean Cross-Entropy ℒ (${Math.log(ppl).toFixed(2)} nats)`
+            : `3D Probability (P) · Taller pillars = higher model confidence`;
+
+          const N = items.length;
+          const span = Math.min(8.8, Math.max(3.6, N * 1.15));
+          const nlps = items.map(it => -Math.log(Math.max(1e-12, it.prob)));
+          const maxNLP = Math.max(...nlps, 1.5);
+          const meanNLP = nlps.reduce((a, b) => a + b, 0) / N;
+
+          const pillars = [];
+          items.forEach((it, i) => {
+            const x = N === 1 ? 0 : -span / 2 + (i / (N - 1)) * span;
+            const nlp = nlps[i];
+            const targetH = metricMode === "surprisal"
+              ? Math.max(0.28, (nlp / maxNLP) * 3.4)
+              : Math.max(0.22, it.prob * 3.4);
+
+            const col = colorForProb(it.prob);
+            const geo = new THREE.CylinderGeometry(0.28, 0.34, 1, 24);
+            geo.translate(0, 0.5, 0);
+            const mat = new THREE.MeshPhysicalMaterial({
+              color: col, roughness: 0.22, metalness: 0.1, clearcoat: 0.7
+            });
+            const mesh = new THREE.Mesh(geo, mat);
+            mesh.position.set(x, 0, 0);
+            mesh.scale.y = 0.05;
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+            mesh.userData = {
+              label: it.label, prob: it.prob, nlp, invP: 1 / it.prob, targetH
+            };
+            contentGroup.add(mesh);
+            interactiveMeshes.push(mesh);
+
+            // Glowing top crystal sphere
+            const cap = new THREE.Mesh(
+              new THREE.SphereGeometry(0.16, 16, 16),
+              new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: col, emissiveIntensity: 0.45, roughness: 0.15 })
+            );
+            cap.position.set(x, 0.1, 0);
+            contentGroup.add(cap);
+            pillars.push({ mesh, cap, targetH });
+          });
+
+          // Mean cross-entropy ℒ plane when in surprisal mode
+          if (metricMode === "surprisal") {
+            const meanY = Math.max(0.28, (meanNLP / maxNLP) * 3.4);
+            const planeGeo = new THREE.BoxGeometry(span + 1.1, 0.03, 1.4);
+            const planeMat = new THREE.MeshPhysicalMaterial({
+              color: 0x4f46e5, transparent: true, opacity: 0.28, roughness: 0.1
+            });
+            const plane = new THREE.Mesh(planeGeo, planeMat);
+            plane.position.set(0, meanY, 0);
+            contentGroup.add(plane);
+          }
+
+          animUpdater = () => {
+            pillars.forEach(p => {
+              const isHov = p.mesh === hoveredMesh;
+              p.mesh.scale.y += (p.targetH - p.mesh.scale.y) * 0.14;
+              const sXZ = isHov ? 1.18 : 1.0;
+              p.mesh.scale.x += (sXZ - p.mesh.scale.x) * 0.18;
+              p.mesh.scale.z += (sXZ - p.mesh.scale.z) * 0.18;
+              p.cap.position.y = p.mesh.scale.y + 0.24;
+            });
+          };
+        }
+
+        function showNextTokens(items, T) {
+          clearContent();
+          stageModeEl.textContent = `Next-Token Orbit (T=${T.toFixed(2)})`;
+          stageHudEl.textContent = "Top 8 predicted next tokens orbiting the context core · Drag Temperature in Step 3!";
+
+          const center = new THREE.Mesh(
+            new THREE.OctahedronGeometry(0.65, 1),
+            new THREE.MeshPhysicalMaterial({ color: 0x4f46e5, roughness: 0.2, clearcoat: 0.8 })
+          );
+          center.position.set(0, 1.1, 0);
+          center.castShadow = true;
+          contentGroup.add(center);
+
+          const maxP = items[0]?.prob || 1;
+          const bars = [];
+          items.forEach((it, i) => {
+            const angle = -Math.PI * 0.75 + (i / Math.max(1, items.length - 1)) * Math.PI * 1.5;
+            const r = 2.8;
+            const x = Math.sin(angle) * r;
+            const z = Math.cos(angle) * r;
+            const targetH = Math.max(0.25, (it.prob / maxP) * 3.1);
+            const col = i === 0 ? 0x4f46e5 : 0x7c3aed;
+
+            const geo = new THREE.CylinderGeometry(0.24, 0.28, 1, 20);
+            geo.translate(0, 0.5, 0);
+            const mesh = new THREE.Mesh(geo, new THREE.MeshPhysicalMaterial({
+              color: col, roughness: 0.22, clearcoat: 0.65
+            }));
+            mesh.position.set(x, 0, z);
+            mesh.scale.y = 0.05;
+            mesh.castShadow = true;
+            mesh.userData = { label: it.label, prob: it.prob, nlp: -Math.log(Math.max(1e-12, it.prob)), invP: 1 / it.prob };
+            contentGroup.add(mesh);
+            interactiveMeshes.push(mesh);
+            bars.push({ mesh, targetH });
+          });
+
+          animUpdater = (t) => {
+            center.rotation.y = t * 0.7;
+            bars.forEach(b => {
+              b.mesh.scale.y += (b.targetH - b.mesh.scale.y) * 0.16;
+            });
+          };
+        }
+
+        // Pointer Orbit + Zoom + Raycast Tooltip
+        let dragging = false, prevX = 0, prevY = 0;
+        const raycaster = new THREE.Raycaster();
+        const pointer = new THREE.Vector2();
+
+        stageView.addEventListener("pointerdown", e => {
+          dragging = true; prevX = e.clientX; prevY = e.clientY;
+        });
+        window.addEventListener("pointerup", () => { dragging = false; });
+        stageView.addEventListener("pointermove", e => {
+          const rect = stageView.getBoundingClientRect();
+          if (dragging) {
+            theta -= (e.clientX - prevX) * 0.009;
+            phi = Math.max(0.32, Math.min(1.48, phi - (e.clientY - prevY) * 0.008));
+            prevX = e.clientX; prevY = e.clientY;
+            updateCamera();
+          }
+          pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+          pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+          raycaster.setFromCamera(pointer, camera);
+          const hits = raycaster.intersectObjects(interactiveMeshes);
+          if (hits.length) {
+            hoveredMesh = hits[0].object;
+            const d = hoveredMesh.userData;
+            stageTipEl.innerHTML = `<strong>${esc(d.label)}</strong><br/>P = ${(d.prob * 100).toFixed(2)}% &nbsp;|&nbsp; 1/P = ${fmtInvP(d.invP)}<br/>−ln P = ${d.nlp.toFixed(3)} nats`;
+            stageTipEl.style.left = Math.min(rect.width - 170, Math.max(10, e.clientX - rect.left + 12)) + "px";
+            stageTipEl.style.top = Math.max(10, e.clientY - rect.top - 56) + "px";
+            stageTipEl.style.display = "block";
+          } else {
+            hoveredMesh = null;
+            stageTipEl.style.display = "none";
+          }
+        });
+        stageView.addEventListener("wheel", e => {
+          e.preventDefault();
+          radius = Math.max(5.0, Math.min(15.0, radius + e.deltaY * 0.008));
+          updateCamera();
+        }, { passive: false });
+
+        function resize() {
+          const w = stageView.clientWidth || 640;
+          const h = stageView.clientHeight || 300;
+          renderer.setSize(w, h, false);
+          camera.aspect = w / h;
+          camera.updateProjectionMatrix();
+        }
+        window.addEventListener("resize", resize);
+        resize();
+        updateCamera();
+
+        threeAPI = { showIdle, showTokens, showNextTokens, resize };
+        showIdle();
+
+        const clock = new THREE.Clock();
+        (function animate() {
+          requestAnimationFrame(animate);
+          const t = clock.getElapsedTime();
+          if (autoOrbit && !dragging) {
+            theta += 0.0032;
+            updateCamera();
+          }
+          if (animUpdater) animUpdater(t);
+          renderer.render(scene, camera);
+        })();
+      } catch (err) {
+        // Graceful fallback if offline or WebGL unavailable
+        stageModeEl.textContent = "2D Mode";
+        stageHudEl.textContent = "3D WebGL unavailable offline — all calculations still work normally.";
+      }
+    })();
+  </script>
+</body>
+
+</html>
