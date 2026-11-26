@@ -367,6 +367,16 @@ td.cr{color:#059669;font-family:var(--mono);} /* rank */
   --danger-bg: #fbefec;
   --success: #37694d;
   --warn: #a76736;
+  --tone-good: #37694d;
+  --tone-good-surface: #edf5ec;
+  --tone-good-border: #cfe1d0;
+  --tone-warn: #8c6033;
+  --tone-warn-surface: #faf3e7;
+  --tone-warn-border: #ead9bd;
+  --tone-bad: #963e37;
+  --tone-bad-surface: #fbefec;
+  --tone-bad-border: #ebd1ca;
+  --tone-accent: #9b6844;
   --radius: 18px;
   --mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
 }
@@ -517,8 +527,27 @@ tbody tr:hover { background: #f6f7f2; }
 .history-wrap { border-color: #dfe3d9; }
 .history-chip { background: #f7f8f3; }
 .history-chip:hover { border-color: #9eb49d; background: #edf3eb; }
-.history-chip strong, .sp-label, .hl-invp, .hl-mean { color: #315b45; }
-.hl-nlp, .td.ca { color: #9b6844; }
+.history-chip strong, .sp-label, .hl-invp, .hl-mean, .ppl-formula, .equiv-note strong { color: var(--primary); }
+.hl-nlp, td.ca { color: var(--tone-accent); }
+.hl-ppl, td.cr, .rank-1, .info-panel h4, .info-item .il, .info-item .iv { color: var(--tone-good); }
+td.ci { color: var(--primary); }
+td.ce, .rank-top10 { color: var(--tone-warn); }
+.rank-1 { border-color: var(--tone-good-border); background: var(--tone-good-surface); }
+.rank-top10 { border-color: var(--tone-warn-border); background: var(--tone-warn-surface); }
+.rank-other { border-color: var(--tone-bad-border); background: var(--tone-bad-surface); color: var(--tone-bad); }
+.token-chip.prob-high { border-color: var(--tone-good-border); background: var(--tone-good-surface); }
+.token-chip.prob-mid { border-color: var(--tone-warn-border); background: var(--tone-warn-surface); }
+.token-chip.prob-low { border-color: var(--tone-bad-border); background: var(--tone-bad-surface); }
+.status.ready { color: var(--tone-good); }
+.status.error { border-color: var(--tone-bad-border); background: var(--tone-bad-surface); color: var(--tone-bad); }
+.badge-green { border-color: var(--tone-good-border); background: var(--tone-good-surface); color: var(--tone-good); }
+.badge-amber { border-color: var(--tone-warn-border); background: var(--tone-warn-surface); color: var(--tone-warn); }
+.btn-remove { border: 1px solid var(--tone-bad-border); background: var(--tone-bad-surface); color: var(--tone-bad); }
+.btn-remove:hover { background: #f5e2de; }
+.ppl-meaning { color: var(--primary); }
+.info-panel { border-color: var(--tone-good-border); background: var(--tone-good-surface); }
+.info-item .iv { color: var(--tone-good); }
+
 @media (min-width: 900px) {
   .container { gap: 24px; }
   .stepper-bar { padding: 12px 14px; }
